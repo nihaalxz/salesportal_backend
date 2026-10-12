@@ -1,0 +1,16 @@
+=== Generated SQL for Active Users ===
+SELECT [u].[id], [u].[avatar], [u].[basic_salary], [u].[created_at], [u].[email], [u].[email_verified_at], [u].[housing_allowance], [u].[incentive], [u].[is_active], [u].[last_login_at], [u].[last_login_ip], [u].[monthly_target], [u].[name], [u].[password], [u].[profit_generated], [u].[profit_target], [u].[remember_token], [u].[transport_allowance], [u].[updated_at], [u].[user_type]
+FROM [users] AS [u]
+WHERE [u].[is_active] = CAST(1 AS bit)
+
+=== Generated SQL for Bounded Head List ===
+DECLARE @__p_0 int = 10;
+
+SELECT TOP(@__p_0) [h].[id], [h].[address], [h].[balance], [h].[balance_amount], [h].[created_at], [h].[created_by], [h].[deleted_at], [h].[email], [h].[first_name], [h].[last_name], [h].[mobile_no], [h].[nationality], [h].[status], [h].[type], [h].[updated_at], [h].[user_id], [h].[wallet]
+FROM [heads] AS [h]
+ORDER BY [h].[id]
+
+=== Generated SQL for Ledger Projections ===
+SELECT [h].[id] AS [Id], [h].[debit] AS [Debit], [h].[credit] AS [Credit]
+FROM [head_ledgers] AS [h]
+WHERE [h].[head_id] = CAST(123 AS bigint)

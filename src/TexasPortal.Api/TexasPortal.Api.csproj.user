@@ -1,0 +1,7 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="Current" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <ActiveDebugProfile>https</ActiveDebugProfile>
+    <NameOfLastUsedPublishProfile>D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Api\Properties\PublishProfiles\site78827-WebDeploy.pubxml</NameOfLastUsedPublishProfile>
+  </PropertyGroup>
+</Project>

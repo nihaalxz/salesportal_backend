@@ -1,0 +1,1 @@
+import{n as e}from"./BtOycUp9.js";async function t(t,n){return e(`/api/sales/bookings/flights/${t}`,{signal:n})}async function n(t,n){return e(`/api/sales/bookings/flights`,{params:t,signal:n})}async function r(t,n,r){return e(`/api/sales/bookings/flights`,{method:`POST`,headers:{"Idempotency-Key":n},body:JSON.stringify(t),signal:r})}export{t as n,n as r,r as t};

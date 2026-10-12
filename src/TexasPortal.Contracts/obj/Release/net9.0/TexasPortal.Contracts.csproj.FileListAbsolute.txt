@@ -1,0 +1,13 @@
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\bin\Release\net9.0\TexasPortal.Contracts.deps.json
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\bin\Release\net9.0\TexasPortal.Contracts.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\bin\Release\net9.0\TexasPortal.Contracts.pdb
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\TexasPortal.Contracts.GeneratedMSBuildEditorConfig.editorconfig
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\TexasPortal.Contracts.AssemblyInfoInputs.cache
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\TexasPortal.Contracts.AssemblyInfo.cs
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\TexasPortal.Contracts.csproj.CoreCompileInputs.cache
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\TexasPortal.Contracts.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\refint\TexasPortal.Contracts.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\TexasPortal.Contracts.pdb
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\ref\TexasPortal.Contracts.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\bin\Release\net9.0\TexasPortal.Contracts.runtimeconfig.json
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Release\net9.0\TexasPortal.Contracts.genruntimeconfig.cache

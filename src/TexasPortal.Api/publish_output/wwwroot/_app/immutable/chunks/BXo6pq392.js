@@ -1,0 +1,1 @@
+import{n as e}from"./BtOycUp9.js";async function t(t,n){return e(`/api/sales/leads`,{params:t,signal:n})}async function n(t){return e(`/api/sales/leads`,{method:`POST`,body:JSON.stringify(t)})}async function r(t,n){return e(`/api/sales/leads/${t}`,{method:`PUT`,body:JSON.stringify(n)})}export{t as n,r,n as t};

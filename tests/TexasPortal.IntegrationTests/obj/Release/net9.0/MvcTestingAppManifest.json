@@ -1,0 +1,7 @@
+{
+  "TexasPortal.Api, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api",
+  "TexasPortal.Application, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application",
+  "TexasPortal.Contracts, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts",
+  "TexasPortal.Domain, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain",
+  "TexasPortal.Infrastructure, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure"
+}

@@ -1,0 +1,7 @@
+=== User Projection ===
+SELECT [u].[id] AS [Id], [u].[name] AS [Name], [u].[email] AS [Email], [u].[basic_salary] AS [BasicSalary]
+FROM [users] AS [u]
+
+=== Head Projection ===
+SELECT [h].[id] AS [Id], [h].[email] AS [Email], [h].[balance] AS [Balance]
+FROM [heads] AS [h]

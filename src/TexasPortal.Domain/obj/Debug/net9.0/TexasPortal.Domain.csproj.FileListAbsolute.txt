@@ -1,0 +1,13 @@
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\bin\Debug\net9.0\TexasPortal.Domain.deps.json
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\bin\Debug\net9.0\TexasPortal.Domain.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\bin\Debug\net9.0\TexasPortal.Domain.pdb
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\TexasPortal.Domain.GeneratedMSBuildEditorConfig.editorconfig
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\TexasPortal.Domain.AssemblyInfoInputs.cache
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\TexasPortal.Domain.AssemblyInfo.cs
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\TexasPortal.Domain.csproj.CoreCompileInputs.cache
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\TexasPortal.Domain.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\refint\TexasPortal.Domain.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\TexasPortal.Domain.pdb
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\ref\TexasPortal.Domain.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\bin\Debug\net9.0\TexasPortal.Domain.runtimeconfig.json
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Debug\net9.0\TexasPortal.Domain.genruntimeconfig.cache

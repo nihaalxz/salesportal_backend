@@ -1,0 +1,1 @@
+import"./C0nYe6LY.js";import{r as e}from"./B3J4yvCI.js";var t=()=>{let t=e;return{page:{subscribe:t.page.subscribe},navigating:{subscribe:t.navigating.subscribe},updated:t.updated}},n={subscribe(e){return t().page.subscribe(e)}};export{n as t};
