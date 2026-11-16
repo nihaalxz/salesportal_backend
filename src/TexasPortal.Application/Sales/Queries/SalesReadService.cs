@@ -981,17 +981,24 @@ public sealed class SalesReadService : ISalesReadService
             };
         }).ToList();
 
-        if (items.Count > 0)
+        if (items.Count > 0 && _assignmentClient != null)
         {
-            var assignments = await _assignmentClient.GetActiveAssignmentsAsync("Visa", items.Select(x => x.Id), ct);
-            foreach (var item in items)
+            try
             {
-                if (assignments.TryGetValue(item.Id, out var a))
+                var assignments = await _assignmentClient.GetActiveAssignmentsAsync("Visa", items.Select(x => x.Id), ct);
+                foreach (var item in items)
                 {
-                    item.AssignedOperatorName = a.AssignedOperatorName;
-                    item.AssignedAt = a.AssignedAt;
-                    item.AssignmentStatus = a.Status;
+                    if (assignments.TryGetValue(item.Id, out var a))
+                    {
+                        item.AssignedOperatorName = a.AssignedOperatorName;
+                        item.AssignedAt = a.AssignedAt;
+                        item.AssignmentStatus = a.Status;
+                    }
                 }
+            }
+            catch
+            {
+                // Non-critical fallback if operational assignment client is unavailable
             }
         }
 
@@ -1056,17 +1063,24 @@ public sealed class SalesReadService : ISalesReadService
             })
             .ToListAsync(ct);
 
-        if (items.Count > 0)
+        if (items.Count > 0 && _assignmentClient != null)
         {
-            var assignments = await _assignmentClient.GetActiveAssignmentsAsync("Vfs", items.Select(x => x.Id), ct);
-            foreach (var item in items)
+            try
             {
-                if (assignments.TryGetValue(item.Id, out var a))
+                var assignments = await _assignmentClient.GetActiveAssignmentsAsync("Vfs", items.Select(x => x.Id), ct);
+                foreach (var item in items)
                 {
-                    item.AssignedOperatorName = a.AssignedOperatorName;
-                    item.AssignedAt = a.AssignedAt;
-                    item.AssignmentStatus = a.Status;
+                    if (assignments.TryGetValue(item.Id, out var a))
+                    {
+                        item.AssignedOperatorName = a.AssignedOperatorName;
+                        item.AssignedAt = a.AssignedAt;
+                        item.AssignmentStatus = a.Status;
+                    }
                 }
+            }
+            catch
+            {
+                // Non-critical fallback
             }
         }
 
@@ -1129,17 +1143,24 @@ public sealed class SalesReadService : ISalesReadService
             })
             .ToListAsync(ct);
 
-        if (items.Count > 0)
+        if (items.Count > 0 && _assignmentClient != null)
         {
-            var assignments = await _assignmentClient.GetActiveAssignmentsAsync("Holiday", items.Select(x => x.Id), ct);
-            foreach (var item in items)
+            try
             {
-                if (assignments.TryGetValue(item.Id, out var a))
+                var assignments = await _assignmentClient.GetActiveAssignmentsAsync("Holiday", items.Select(x => x.Id), ct);
+                foreach (var item in items)
                 {
-                    item.AssignedOperatorName = a.AssignedOperatorName;
-                    item.AssignedAt = a.AssignedAt;
-                    item.AssignmentStatus = a.Status;
+                    if (assignments.TryGetValue(item.Id, out var a))
+                    {
+                        item.AssignedOperatorName = a.AssignedOperatorName;
+                        item.AssignedAt = a.AssignedAt;
+                        item.AssignmentStatus = a.Status;
+                    }
                 }
+            }
+            catch
+            {
+                // Non-critical fallback
             }
         }
 
@@ -1624,15 +1645,25 @@ public sealed class SalesReadService : ISalesReadService
                 // Fallback silently if master api fails
             }
 
-            var assignments = await _assignmentClient.GetActiveAssignmentsAsync("Visa", new[] { result.Id }, ct);
             string? assignedOpName = null;
             DateTime? assignedAt = null;
             OperationalAssignmentStatus? assignStatus = null;
-            if (assignments.TryGetValue(result.Id, out var a))
+            if (_assignmentClient != null)
             {
-                assignedOpName = a.AssignedOperatorName;
-                assignedAt = a.AssignedAt;
-                assignStatus = a.Status;
+                try
+                {
+                    var assignments = await _assignmentClient.GetActiveAssignmentsAsync("Visa", new[] { result.Id }, ct);
+                    if (assignments.TryGetValue(result.Id, out var a))
+                    {
+                        assignedOpName = a.AssignedOperatorName;
+                        assignedAt = a.AssignedAt;
+                        assignStatus = a.Status;
+                    }
+                }
+                catch
+                {
+                    // Fallback silently if assignment client fails
+                }
             }
 
             var retInfo = await CheckSalesReturnAsync(result.Id, result.DocumentNumber, "visa", result.PaymentStatus, result.ProcessingStatus, ct);
@@ -1648,8 +1679,19 @@ public sealed class SalesReadService : ISalesReadService
                 ))
                 .ToListAsync(ct) : new List<TexasPortal.Application.Sales.Services.ReconciledFeeItem>();
 
-            var reconciliation = await _reconciliationService.ReconcileVisaFeesAsync(result.Id, govtFees, ct);
-            var effectiveSupplierCost = reconciliation.EffectiveSupplierCost;
+            decimal effectiveSupplierCost = result.ExpectedSupplierCost;
+            if (_reconciliationService != null)
+            {
+                try
+                {
+                    var reconciliation = await _reconciliationService.ReconcileVisaFeesAsync(result.Id, govtFees, ct);
+                    effectiveSupplierCost = reconciliation.EffectiveSupplierCost;
+                }
+                catch
+                {
+                    // Fallback to expected supplier cost if reconciliation service throws
+                }
+            }
             var effectiveProfit = result.PayableAmount - effectiveSupplierCost;
 
             return new VisaApplicationDetailResponse
