@@ -1,4 +1,4 @@
-﻿using System.Threading;
+using System.Threading;
 using System.Threading.Tasks;
 using TexasPortal.Contracts.Common;
 using TexasPortal.Contracts.Sales.Bookings;
@@ -14,8 +14,20 @@ namespace TexasPortal.Application.Sales.Queries;
 public interface IOperationsReadService
 {
     Task<IEnumerable<SalesmanResponse>> GetSalesmenAsync(CancellationToken ct);
+    Task<List<BookingFinancialAggregate>> GetAllBookingsFinancialsAsync(System.DateTime? startDate = null, System.DateTime? endDate = null, CancellationToken ct = default);
+    Task<TexasPortal.Contracts.Sales.Performance.OperationalBookingFinancialsSummaryResponse> GetBookingFinancialsSummaryAsync(System.DateTime? startDate = null, System.DateTime? endDate = null, string? dealStatus = null, long? salesmanId = null, CancellationToken ct = default);
     Task<IEnumerable<SalesmanReportResponse>> GetSalesmenReportAsync(System.DateTime? startDate = null, System.DateTime? endDate = null, CancellationToken ct = default);
     Task<IEnumerable<SalesmanServiceEntryResponse>> GetSalesmanServiceEntriesAsync(long salesmanId, System.DateTime? startDate = null, System.DateTime? endDate = null, CancellationToken ct = default);
+    Task<PagedResponse<OpenDealEntryResponse>> GetOpenDealsAsync(
+        int page, int pageSize, string? serviceType = null, string? search = null,
+        long? salesmanId = null, string? paymentStatus = null,
+        System.DateTime? startDate = null, System.DateTime? endDate = null,
+        CancellationToken ct = default);
+    Task<OpenDealsSummaryResponse> GetOpenDealsSummaryAsync(
+        string? serviceType = null, string? search = null,
+        long? salesmanId = null, string? paymentStatus = null,
+        System.DateTime? startDate = null, System.DateTime? endDate = null,
+        CancellationToken ct = default);
 
     Task<VisaApplicationDetailResponse?> GetVisaApplicationByIdAsync(
         long id, CancellationToken ct);
@@ -65,7 +77,10 @@ public interface IOperationsReadService
 
     // Global queries for Customer Heads
     Task<PagedResponse<HeadSummaryResponse>> GetHeadsAsync(
-        int page, int pageSize, string? search, string? type = null, CancellationToken ct = default);
+        int page, int pageSize, string? search, string? type = null, long? salesmanId = null, CancellationToken ct = default);
+
+    Task<HeadSummaryStatsResponse> GetHeadsSummaryAsync(
+        long? salesmanId = null, CancellationToken ct = default);
 
     Task<HeadDetailResponse?> GetHeadByIdAsync(
         long id, string? type = null, CancellationToken ct = default);

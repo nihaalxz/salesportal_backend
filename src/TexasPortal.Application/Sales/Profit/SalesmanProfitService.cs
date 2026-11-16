@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -53,9 +53,14 @@ public class SalesmanProfitService : ISalesmanProfitService
         return rejectionFee + independentAdjustments;
     }
 
+    public static decimal CalculateInhouseProfit(decimal payableAmount, decimal estimatedSupplierCost = 0m, decimal independentAdjustments = 0m)
+    {
+        return (payableAmount - estimatedSupplierCost) + independentAdjustments;
+    }
+
     public static decimal CalculateInhouseProfit(decimal independentAdjustments = 0m)
     {
-        return 0m + independentAdjustments;
+        return independentAdjustments;
     }
 
     // ─── Create Estimated Profit Record (at booking creation) ────────────────
@@ -95,7 +100,7 @@ public class SalesmanProfitService : ISalesmanProfitService
         var profitType = isInhouse ? ProfitType.Inhouse : ProfitType.Normal;
         var supplierCostSource = SupplierCostSource.Estimated;
         var finalSupplierCost = isInhouse ? 0m : estimatedSupplierCost;
-        var profitAmount = isInhouse ? CalculateInhouseProfit() : CalculateNormalProfit(payableAmount, finalSupplierCost);
+        var profitAmount = CalculateNormalProfit(payableAmount, finalSupplierCost);
 
         var record = new SalesmanProfitRecord
         {
@@ -194,17 +199,18 @@ public class SalesmanProfitService : ISalesmanProfitService
             }
         }
 
-        var approvedTotal = approvedSummary?.ApprovedTotal ?? (record?.AccountsApprovedTotal ?? 0m);
+        bool hasApprovedPayments = approvedSummary != null && approvedSummary.Payments != null && approvedSummary.Payments.Count > 0;
+        var approvedTotal = hasApprovedPayments ? approvedSummary!.ApprovedTotal : (record?.AccountsApprovedTotal ?? 0m);
         bool isCompleted = isDealClosed || string.Equals(processingStatus, "completed", StringComparison.OrdinalIgnoreCase);
 
         if (record == null)
         {
             if (salesmanId == 0) return null;
 
-            bool effectiveInhouse = isInhouse && (approvedTotal <= 0m);
+            bool effectiveInhouse = isInhouse && !hasApprovedPayments;
             var pType = isRejected ? ProfitType.Rejection : (effectiveInhouse ? ProfitType.Inhouse : ProfitType.Normal);
-            var effectiveCost = effectiveInhouse ? 0m : (approvedTotal > 0m ? approvedTotal : expectedSupplierCost);
-            var pAmt = isRejected ? CalculateRejectionProfit(rejFee) : (effectiveInhouse ? 0m : CalculateNormalProfit(payable, effectiveCost));
+            var effectiveCost = hasApprovedPayments ? approvedTotal : (isInhouse ? 0m : expectedSupplierCost);
+            var pAmt = isRejected ? CalculateRejectionProfit(rejFee) : CalculateNormalProfit(payable, effectiveCost);
 
             record = new SalesmanProfitRecord
             {
@@ -216,8 +222,8 @@ public class SalesmanProfitService : ISalesmanProfitService
                 FinalSupplierCost = effectiveCost,
                 ProfitAmount = pAmt,
                 ProfitType = pType,
-                SupplierCostSource = approvedTotal > 0 ? SupplierCostSource.Approved : SupplierCostSource.Estimated,
-                AccountsApprovedTotal = approvedTotal,
+                SupplierCostSource = hasApprovedPayments ? SupplierCostSource.Approved : SupplierCostSource.Estimated,
+                AccountsApprovedTotal = hasApprovedPayments ? approvedTotal : null,
                 RejectionFee = isRejected ? rejFee : null,
                 IsFinal = isCompleted,
                 BookingCreatedAt = createdAt,
@@ -260,7 +266,10 @@ public class SalesmanProfitService : ISalesmanProfitService
 
         // Recalculate Final Profit
         record.PayableAmount = payable;
-        record.AccountsApprovedTotal = approvedTotal;
+        if (hasApprovedPayments)
+        {
+            record.AccountsApprovedTotal = approvedTotal;
+        }
 
         var adjustmentsSum = await _db.SalesmanProfitAdjustments
             .Where(a => a.SalesmanProfitRecordId == record.Id)
@@ -272,12 +281,13 @@ public class SalesmanProfitService : ISalesmanProfitService
         }
         else
         {
-            bool effectiveInhouse = isInhouse && (approvedTotal <= 0m);
+            bool effectiveInhouse = isInhouse && !hasApprovedPayments;
             record.ProfitType = effectiveInhouse ? ProfitType.Inhouse : ProfitType.Normal;
-            record.FinalSupplierCost = effectiveInhouse ? 0m : (approvedTotal > 0m ? approvedTotal : expectedSupplierCost);
-            record.SupplierCostSource = approvedTotal > 0m ? SupplierCostSource.Approved : SupplierCostSource.Estimated;
+            record.FinalSupplierCost = hasApprovedPayments ? approvedTotal : (isInhouse ? 0m : expectedSupplierCost);
+            record.SupplierCostSource = hasApprovedPayments ? SupplierCostSource.Approved : SupplierCostSource.Estimated;
 
-            record.ProfitAmount = effectiveInhouse ? CalculateInhouseProfit(adjustmentsSum) : CalculateNormalProfit(record.PayableAmount, record.FinalSupplierCost, adjustmentsSum);
+            // Full sale amount if FinalSupplierCost == 0
+            record.ProfitAmount = CalculateNormalProfit(record.PayableAmount, record.FinalSupplierCost, adjustmentsSum);
         }
 
         record.IsFinal = isCompleted;
@@ -733,9 +743,19 @@ public class SalesmanProfitService : ISalesmanProfitService
             .Where(v => visaIds.Contains(v.Id))
             .ToDictionaryAsync(v => v.Id, v => v.Head != null ? $"{v.Head.FirstName} {v.Head.LastName}".Trim() : (v.Applicants != null && v.Applicants.Count > 0 ? $"{v.Applicants.First().FName} {v.Applicants.First().LName}".Trim() : (v.DocumentNumber ?? "Visa Applicant")), ct);
 
-        var vfsNames = await _db.VfsAppointments.AsNoTracking().Include(v => v.Head).Include(v => v.Applicants)
+        var vfsNames = await _db.VfsAppointments.AsNoTracking()
             .Where(v => vfsIds.Contains(v.Id))
-            .ToDictionaryAsync(v => v.Id, v => v.Head != null ? $"{v.Head.FirstName} {v.Head.LastName}".Trim() : (!string.IsNullOrWhiteSpace(v.Name) ? v.Name : (v.Applicants != null && v.Applicants.Count > 0 ? v.Applicants.First().Name : "VFS Appointment")), ct);
+            .Select(v => new
+            {
+                v.Id,
+                HeadName = v.Head != null ? (v.Head.FirstName + " " + v.Head.LastName).Trim() : null,
+                v.Name,
+                FirstApplicantName = v.Applicants.Select(a => a.Name).FirstOrDefault()
+            })
+            .ToDictionaryAsync(
+                v => v.Id,
+                v => !string.IsNullOrWhiteSpace(v.HeadName) ? v.HeadName : (!string.IsNullOrWhiteSpace(v.Name) ? v.Name : (!string.IsNullOrWhiteSpace(v.FirstApplicantName) ? v.FirstApplicantName : "VFS Appointment")),
+                ct);
 
         var holidayNames = await _db.HolidayPackages.AsNoTracking().Include(h => h.Head)
             .Where(h => holidayIds.Contains(h.Id))
@@ -825,7 +845,7 @@ public class SalesmanProfitService : ISalesmanProfitService
                 decimal flightCost = f.Passengers != null && f.Passengers.Count > 0
                     ? f.Passengers.Sum(p => p.ExpectedSupplierCost)
                     : f.ExpectedSupplierCost;
-                var pAmt = isFlightInhouse ? CalculateInhouseProfit() : CalculateNormalProfit(f.PayableAmount, flightCost);
+                var pAmt = isFlightInhouse ? CalculateNormalProfit(f.PayableAmount, 0m) : CalculateNormalProfit(f.PayableAmount, flightCost);
 
                 newRecords.Add(new SalesmanProfitRecord
                 {
@@ -855,7 +875,7 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Hotel:{h.Id}"))
             {
-                var pAmt = h.IsInhouse ? CalculateInhouseProfit() : CalculateNormalProfit(h.PayableAmount, h.ExpectedSupplierCost);
+                var pAmt = h.IsInhouse ? CalculateNormalProfit(h.PayableAmount, 0m) : CalculateNormalProfit(h.PayableAmount, h.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -891,7 +911,7 @@ public class SalesmanProfitService : ISalesmanProfitService
                 decimal visaExpectedCost = v.Applicants != null && v.Applicants.Count > 0
                     ? v.Applicants.Where(a => !a.IsInhouse).Sum(a => a.ExpectedSupplierCost)
                     : v.ExpectedSupplierCost;
-                var pAmt = isRej ? CalculateRejectionProfit(v.RejectionFee) : (isVisaInhouse ? CalculateInhouseProfit() : CalculateNormalProfit(v.PayableAmount, visaExpectedCost));
+                var pAmt = isRej ? CalculateRejectionProfit(v.RejectionFee) : (isVisaInhouse ? CalculateNormalProfit(v.PayableAmount, 0m) : CalculateNormalProfit(v.PayableAmount, visaExpectedCost));
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -920,7 +940,7 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"VFS:{vfs.Id}"))
             {
-                var pAmt = vfs.IsInhouse ? CalculateInhouseProfit() : CalculateNormalProfit(vfs.PayableAmount, vfs.ExpectedSupplierCost);
+                var pAmt = vfs.IsInhouse ? CalculateNormalProfit(vfs.PayableAmount, 0m) : CalculateNormalProfit(vfs.PayableAmount, vfs.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -949,7 +969,7 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Holiday:{hol.Id}"))
             {
-                var pAmt = hol.IsInhouse ? CalculateInhouseProfit() : CalculateNormalProfit(hol.PayableAmount, hol.ExpectedSupplierCost);
+                var pAmt = hol.IsInhouse ? CalculateNormalProfit(hol.PayableAmount, 0m) : CalculateNormalProfit(hol.PayableAmount, hol.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -978,7 +998,7 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Transport:{tr.Id}"))
             {
-                var pAmt = tr.IsInhouse ? CalculateInhouseProfit() : CalculateNormalProfit(tr.PayableAmount, tr.ExpectedSupplierCost);
+                var pAmt = tr.IsInhouse ? CalculateNormalProfit(tr.PayableAmount, 0m) : CalculateNormalProfit(tr.PayableAmount, tr.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -1007,7 +1027,7 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Other:{ot.Id}"))
             {
-                var pAmt = ot.IsInhouse ? CalculateInhouseProfit() : CalculateNormalProfit(ot.PayableAmount, ot.ExpectedSupplierCost);
+                var pAmt = ot.IsInhouse ? CalculateNormalProfit(ot.PayableAmount, 0m) : CalculateNormalProfit(ot.PayableAmount, ot.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,

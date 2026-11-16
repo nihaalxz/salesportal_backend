@@ -56,7 +56,7 @@ public sealed class LeadsController : ControllerBase
             return Unauthorized();
 
         if (page < 1) return BadRequest("page must be >= 1");
-        if (pageSize is < 1 or > 100) return BadRequest("pageSize must be between 1 and 100");
+        if (pageSize is < 1 or > 1000) return BadRequest("pageSize must be between 1 and 1000");
 
         var allowedSortBy = new[] { "name", "status", "createdAt" };
         if (!allowedSortBy.Contains(sortBy, System.StringComparer.OrdinalIgnoreCase))

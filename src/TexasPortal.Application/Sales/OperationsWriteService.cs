@@ -62,6 +62,7 @@ public interface IOperationsWriteService
     Task<bool> UploadHolidayDocsAsync(long id, List<KeyValuePair<string, ApplicationFile>> documents, CancellationToken ct);
 
     Task<bool> UpdateReceiptPaymentStatusAsync(long id, string status, CancellationToken ct);
+    Task<bool> DeleteHeadAsync(long id, CancellationToken ct = default);
 }
 
 public sealed class OperationsWriteService : IOperationsWriteService
@@ -714,6 +715,139 @@ public sealed class OperationsWriteService : IOperationsWriteService
                 $"{receipt.Narration}", ct, receipt.DocumentNumber ?? receipt.ReceiptId);
         }
 
+        return true;
+    }
+
+    public async Task<bool> DeleteHeadAsync(long id, CancellationToken ct = default)
+    {
+        var head = await _db.Heads.FirstOrDefaultAsync(h => h.Id == id, ct);
+        if (head == null) return false;
+
+        const string sql = @"
+BEGIN TRANSACTION;
+BEGIN TRY
+    DECLARE @HeadId BIGINT = {0};
+
+    DECLARE @VisaIds TABLE (id BIGINT);
+    INSERT INTO @VisaIds SELECT id FROM sales_visa_applications WHERE head_id = @HeadId;
+
+    DECLARE @FlightIds TABLE (id BIGINT);
+    INSERT INTO @FlightIds SELECT id FROM flight_bookings WHERE head_id = @HeadId;
+
+    DECLARE @HotelIds TABLE (id BIGINT);
+    INSERT INTO @HotelIds SELECT id FROM hotel_bookings WHERE head_id = @HeadId;
+
+    DECLARE @HolidayIds TABLE (id BIGINT);
+    INSERT INTO @HolidayIds SELECT id FROM holiday_packages WHERE head_id = @HeadId;
+
+    DECLARE @VfsIds TABLE (id BIGINT);
+    INSERT INTO @VfsIds SELECT id FROM vfs_appointments WHERE head_id = @HeadId;
+
+    DECLARE @TransportIds TABLE (id BIGINT);
+    INSERT INTO @TransportIds SELECT id FROM transportations WHERE head_id = @HeadId;
+
+    DECLARE @OtherIds TABLE (id BIGINT);
+    INSERT INTO @OtherIds SELECT id FROM other_services WHERE head_id = @HeadId;
+
+    DECLARE @ReceiptIds TABLE (id BIGINT);
+    INSERT INTO @ReceiptIds SELECT id FROM receipts WHERE head_id = @HeadId OR agent_id = @HeadId;
+
+    DECLARE @ReceivableIds TABLE (id BIGINT);
+    INSERT INTO @ReceivableIds SELECT Id FROM CreditReceivables WHERE HeadId = @HeadId OR CustomerId = @HeadId OR AgentId = @HeadId;
+
+    DECLARE @QuotationIds TABLE (id BIGINT);
+    INSERT INTO @QuotationIds SELECT Id FROM quotations WHERE HeadId = @HeadId;
+
+    -- 1. Delete CreditReceivables children & receipts links
+    DELETE FROM BadDebtWriteOffs WHERE ReceivableId IN (SELECT id FROM @ReceivableIds);
+    DELETE FROM CreditNotes WHERE ReceivableId IN (SELECT id FROM @ReceivableIds);
+    DELETE FROM ReceivableTransactions WHERE ReceivableId IN (SELECT id FROM @ReceivableIds);
+    DELETE FROM ReceiptAllocations WHERE ReceivableId IN (SELECT id FROM @ReceivableIds) OR ReceiptId IN (SELECT id FROM @ReceiptIds);
+    DELETE FROM ReceivablePayments WHERE ReceivableId IN (SELECT id FROM @ReceivableIds) OR ReceiptId IN (SELECT id FROM @ReceiptIds);
+    DELETE FROM CreditReceivables WHERE Id IN (SELECT id FROM @ReceivableIds);
+
+    -- 2. Delete Receipts
+    DELETE FROM receipts WHERE id IN (SELECT id FROM @ReceiptIds);
+
+    -- 3. Delete Bookings Children & Profit Records
+    -- Visas
+    DELETE FROM sales_visa_applicants WHERE sales_visa_application_id IN (SELECT id FROM @VisaIds);
+    DELETE FROM sales_visa_govt_fees WHERE sales_visa_application_id IN (SELECT id FROM @VisaIds);
+    DELETE FROM salesman_profit_adjustments WHERE ProfitRecordId IN (SELECT Id FROM salesman_profit_records WHERE booking_type = 'Visa' AND booking_id IN (SELECT id FROM @VisaIds));
+    DELETE FROM salesman_profit_records WHERE booking_type = 'Visa' AND booking_id IN (SELECT id FROM @VisaIds);
+    DELETE FROM sales_visa_applications WHERE id IN (SELECT id FROM @VisaIds);
+
+    -- Flights
+    DELETE FROM flight_passengers WHERE flight_booking_id IN (SELECT id FROM @FlightIds);
+    DELETE FROM salesman_profit_adjustments WHERE ProfitRecordId IN (SELECT Id FROM salesman_profit_records WHERE booking_type = 'Flight' AND booking_id IN (SELECT id FROM @FlightIds));
+    DELETE FROM salesman_profit_records WHERE booking_type = 'Flight' AND booking_id IN (SELECT id FROM @FlightIds);
+    DELETE FROM flight_bookings WHERE id IN (SELECT id FROM @FlightIds);
+
+    -- Hotels
+    DELETE FROM hotel_guests WHERE hotel_booking_id IN (SELECT id FROM @HotelIds);
+    DELETE FROM salesman_profit_adjustments WHERE ProfitRecordId IN (SELECT Id FROM salesman_profit_records WHERE booking_type = 'Hotel' AND booking_id IN (SELECT id FROM @HotelIds));
+    DELETE FROM salesman_profit_records WHERE booking_type = 'Hotel' AND booking_id IN (SELECT id FROM @HotelIds));
+    DELETE FROM hotel_bookings WHERE id IN (SELECT id FROM @HotelIds);
+
+    -- Holidays
+    DELETE FROM holiday_passengers WHERE holiday_package_id IN (SELECT id FROM @HolidayIds);
+    DELETE FROM holiday_package_documents WHERE holiday_package_id IN (SELECT id FROM @HolidayIds);
+    DELETE FROM holiday_package_govt_fees WHERE holiday_package_id IN (SELECT id FROM @HolidayIds);
+    DELETE FROM salesman_profit_adjustments WHERE ProfitRecordId IN (SELECT Id FROM salesman_profit_records WHERE booking_type = 'Holiday' AND booking_id IN (SELECT id FROM @HolidayIds));
+    DELETE FROM salesman_profit_records WHERE booking_type = 'Holiday' AND booking_id IN (SELECT id FROM @HolidayIds));
+    DELETE FROM holiday_packages WHERE id IN (SELECT id FROM @HolidayIds);
+
+    -- VFS
+    DELETE FROM vfs_applicants WHERE vfs_appointment_id IN (SELECT id FROM @VfsIds);
+    DELETE FROM vfs_appointment_govt_fees WHERE vfs_appointment_id IN (SELECT id FROM @VfsIds);
+    DELETE FROM salesman_profit_adjustments WHERE ProfitRecordId IN (SELECT Id FROM salesman_profit_records WHERE booking_type = 'VFS' AND booking_id IN (SELECT id FROM @VfsIds));
+    DELETE FROM salesman_profit_records WHERE booking_type = 'VFS' AND booking_id IN (SELECT id FROM @VfsIds);
+    DELETE FROM vfs_appointments WHERE id IN (SELECT id FROM @VfsIds);
+
+    -- Transport
+    DELETE FROM transport_passengers WHERE transportation_id IN (SELECT id FROM @TransportIds);
+    DELETE FROM salesman_profit_adjustments WHERE ProfitRecordId IN (SELECT Id FROM salesman_profit_records WHERE booking_type = 'Transport' AND booking_id IN (SELECT id FROM @TransportIds));
+    DELETE FROM salesman_profit_records WHERE booking_type = 'Transport' AND booking_id IN (SELECT id FROM @TransportIds));
+    DELETE FROM transportations WHERE id IN (SELECT id FROM @TransportIds);
+
+    -- Other Services
+    DELETE FROM other_service_applicants WHERE other_service_id IN (SELECT id FROM @OtherIds);
+    DELETE FROM salesman_profit_adjustments WHERE ProfitRecordId IN (SELECT Id FROM salesman_profit_records WHERE booking_type = 'Other' AND booking_id IN (SELECT id FROM @OtherIds));
+    DELETE FROM salesman_profit_records WHERE booking_type = 'Other' AND booking_id IN (SELECT id FROM @OtherIds));
+    DELETE FROM other_services WHERE id IN (SELECT id FROM @OtherIds);
+
+    -- 4. Quotations & Disputes
+    DELETE FROM quotation_items WHERE QuotationId IN (SELECT id FROM @QuotationIds);
+    DELETE FROM quotations WHERE Id IN (SELECT id FROM @QuotationIds);
+    DELETE FROM disputes WHERE head_id = @HeadId;
+
+    -- 5. Ledgers & Accounts Transactions
+    DELETE FROM head_ledgers WHERE head_id = @HeadId;
+    DELETE FROM CustomerAccountTransactions WHERE HeadId = @HeadId;
+    DELETE FROM BalanceTransactions WHERE HeadId = @HeadId;
+    DELETE FROM CreditPolicies WHERE HeadId = @HeadId;
+
+    -- 6. Delete the Head
+    DELETE FROM heads WHERE id = @HeadId;
+
+    -- 7. Refresh users.profit_generated for affected salesmen
+    UPDATE u
+    SET u.profit_generated = ISNULL(totals.SumProfit, 0)
+    FROM users u
+    LEFT JOIN (
+        SELECT salesman_id, SUM(profit_amount) AS SumProfit
+        FROM salesman_profit_records
+        GROUP BY salesman_id
+    ) totals ON u.id = totals.salesman_id;
+
+    COMMIT TRANSACTION;
+END TRY
+BEGIN CATCH
+    IF @@TRANCOUNT > 0 ROLLBACK TRANSACTION;
+    THROW;
+END CATCH;
+";
+        await _db.ExecuteSqlRawAsync(sql, [id], ct);
         return true;
     }
 }

@@ -68,6 +68,14 @@ public sealed class VisaApplicationSummaryResponse
     public string? HeadName { get; init; }
     public string? SalesmanName { get; init; }
     public string? VisaPackName { get; init; }
+    public string? CountryName { get; set; }
+    public string? Country { get; set; }
+    public string? PassportNumber { get; set; }
+    public string? PassportNo { get; set; }
+    public string? GovtId { get; set; }
+    public string? GovtTrackingId { get; set; }
+    public string? ApplicantFirstName { get; set; }
+    public string? ApplicantFirstNames { get; set; }
     public string ClientType { get; init; } = null!;
     public string? PaymentMethod { get; init; }
     public string ProcessingStatus { get; init; } = null!;
@@ -514,4 +522,35 @@ public sealed class TransportationDetailResponse
     public DateTime? CreatedAt { get; init; }
     public DateTime? UpdatedAt { get; init; }
     public System.Collections.Generic.List<TransportPassengerResponse> Passengers { get; init; } = new();
+}
+
+public sealed class OpenDealEntryResponse
+{
+    public long Id { get; set; }
+    public string ServiceType { get; set; } = null!; // "Flight" | "Hotel" | "Visa" | "Holiday" | "VFS" | "Transport" | "Other"
+    public string DocumentNumber { get; set; } = null!; // e.g. "TXSVISA176293", "FLT-10294"
+    public DateTime CreatedAt { get; set; }
+    public long? HeadId { get; set; }
+    public string? HeadName { get; set; }
+    public string? ClientType { get; set; } // "customer" | "agent"
+    public long SalesmanId { get; set; }
+    public string? SalesmanName { get; set; }
+    public string? MainDetails { get; set; } // Route, Visa Package & Country, Hotel & Destination, etc.
+    public decimal PayableAmount { get; set; }
+    public decimal ExpectedSupplierCost { get; set; }
+    public decimal ExpectedProfit { get; set; }
+    public string? PaymentMethod { get; set; }
+    public string? PaymentStatus { get; set; }
+    public string? ProcessingStatus { get; set; }
+    public bool IsDealClosed { get; set; }
+    public bool OperationClosed { get; set; }
+}
+
+public sealed class OpenDealsSummaryResponse
+{
+    public int TotalOpenDeals { get; set; }
+    public decimal TotalSalesValue { get; set; }
+    public decimal TotalExpectedCost { get; set; }
+    public decimal TotalExpectedProfit { get; set; }
+    public System.Collections.Generic.Dictionary<string, int> ServiceBreakdown { get; set; } = new();
 }

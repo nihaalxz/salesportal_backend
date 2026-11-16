@@ -37,7 +37,7 @@ public class VfsInvoiceBuilder : IInvoiceBuilder
     {
         var booking = await _operationsReadService.GetVfsAppointmentByIdAsync(id, ct);
 
-        if (booking is null) return null;
+        if (booking is null || (userId > 0 && booking.CreatedBy != userId)) return null;
 
         var items = new List<InvoiceLineItem>();
 

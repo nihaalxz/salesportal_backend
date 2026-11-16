@@ -296,7 +296,7 @@ public sealed class CreateHolidayPackageHandler
                     BankId = request.PaymentMethod == "online" ? request.BankId : null,
                     BankName = request.PaymentMethod == "online" ? request.BankName : null,
                     PaymentProof = request.PaymentProof,
-                    PaymentStatus = "pending",
+                    PaymentStatus = "success",
                     ProcessingStatus = "pending",
                     CreatedAt = DateTime.UtcNow
                 };

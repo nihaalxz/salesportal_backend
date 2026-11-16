@@ -1,4 +1,4 @@
-﻿using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using QuestPDF.Fluent;
@@ -125,7 +125,36 @@ public sealed class InternalOperationsController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
-    // â”€â”€â”€ Flights â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+    // ─── Open Deals ────────────────────────────────────────────────────────
+    [HttpGet("open-deals")]
+    [ProducesResponseType(typeof(PagedResponse<OpenDealEntryResponse>), 200)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> GetOpenDeals(
+        [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
+        [FromQuery] string? serviceType = null, [FromQuery] string? search = null,
+        long? salesmanId = null, [FromQuery] string? paymentStatus = null,
+        [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null,
+        CancellationToken ct = default)
+    {
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
+        var result = await _readService.GetOpenDealsAsync(page, pageSize, serviceType, search, salesmanId, paymentStatus, startDate, endDate, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("open-deals/summary")]
+    [ProducesResponseType(typeof(OpenDealsSummaryResponse), 200)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> GetOpenDealsSummary(
+        [FromQuery] string? serviceType = null, [FromQuery] string? search = null,
+        long? salesmanId = null, [FromQuery] string? paymentStatus = null,
+        [FromQuery] DateTime? startDate = null, [FromQuery] DateTime? endDate = null,
+        CancellationToken ct = default)
+    {
+        var result = await _readService.GetOpenDealsSummaryAsync(serviceType, search, salesmanId, paymentStatus, startDate, endDate, ct);
+        return Ok(result);
+    }
+
+    // ─── Flights ────────────────────────────────────────────────────────────
     [HttpGet("flights")]
     [ProducesResponseType(typeof(PagedResponse<FlightBookingSummaryResponse>), 200)]
     [ProducesResponseType(401)]
@@ -223,16 +252,29 @@ public sealed class InternalOperationsController : ControllerBase
 
     // â”€â”€â”€ Heads â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [HttpGet("heads")]
+    [HttpGet("salesmen/{salesmanId:long}/heads")]
     [ProducesResponseType(typeof(PagedResponse<HeadSummaryResponse>), 200)]
     [ProducesResponseType(401)]
     public async Task<IActionResult> GetHeads(
         [FromQuery] int page = 1, [FromQuery] int pageSize = 500,
         [FromQuery] string? search = null,
         [FromQuery] string? type = null,
+        long? salesmanId = null,
         CancellationToken ct = default)
     {
         if (page < 1 || pageSize is < 1 or > 5000) return BadRequest("Invalid paging parameters.");
-        var result = await _readService.GetHeadsAsync(page, pageSize, search, type, ct);
+        var result = await _readService.GetHeadsAsync(page, pageSize, search, type, salesmanId, ct);
+        return Ok(result);
+    }
+
+    [HttpGet("heads/summary")]
+    [ProducesResponseType(typeof(HeadSummaryStatsResponse), 200)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> GetHeadsSummary(
+        long? salesmanId = null,
+        CancellationToken ct = default)
+    {
+        var result = await _readService.GetHeadsSummaryAsync(salesmanId, ct);
         return Ok(result);
     }
 
@@ -311,6 +353,90 @@ public sealed class InternalOperationsController : ControllerBase
         return result is null ? NotFound() : Ok(result);
     }
 
+    [HttpPost("receipts")]
+    [ProducesResponseType(typeof(ReceiptDetailResponse), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> CreateReceipt([FromBody] CreateInternalReceiptRequest request, CancellationToken ct)
+    {
+        if (request == null) return BadRequest("Request body cannot be null.");
+
+        // Idempotency: Return existing receipt if ExternalReference already processed
+        if (!string.IsNullOrWhiteSpace(request.ExternalReference))
+        {
+            var existingReceipt = await _db.Receipts
+                .AsNoTracking()
+                .FirstOrDefaultAsync(r => r.ExternalReference == request.ExternalReference && r.DeletedAt == null, ct);
+
+            if (existingReceipt != null)
+            {
+                var existingDetails = await _readService.GetReceiptByIdAsync(existingReceipt.Id, ct);
+                if (existingDetails != null) return Ok(existingDetails);
+            }
+        }
+
+        if (request.Amount <= 0)
+        {
+            return BadRequest("Receipt amount must be greater than zero.");
+        }
+
+        var head = await _db.Heads.FirstOrDefaultAsync(h => h.Id == request.HeadId && h.DeletedAt == null, ct);
+        if (head == null)
+        {
+            return BadRequest($"Head with ID {request.HeadId} was not found.");
+        }
+
+        var isAgent = string.Equals(head.Type, "agent", StringComparison.OrdinalIgnoreCase);
+
+        var docGen = HttpContext.RequestServices.GetRequiredService<TexasPortal.Domain.Common.IDocumentNumberGenerator>();
+        var docNo = await docGen.GenerateDocumentNumberAsync("TXSRCPT", "Seq_ReceiptDocumentNo", ct);
+        var rand = new Random();
+        var receiptId = "TX" + rand.Next(100000, 1000000);
+
+        var safeNarration = string.IsNullOrWhiteSpace(request.Notes) ? "Payment Collection" : request.Notes.Trim();
+        var safePaymentMode = (request.PaymentMode ?? "cash").Trim().ToLowerInvariant();
+
+        var receipt = new Receipt
+        {
+            DocumentNumber = docNo,
+            CreatedBy = request.SalesmanId > 0 ? request.SalesmanId : head.CreatedBy,
+            ReceiptId = receiptId,
+            HeadId = !isAgent ? request.HeadId : null,
+            AgentId = isAgent ? request.HeadId : null,
+            Narration = safeNarration,
+            Service = "deposit",
+            ReceiptType = TexasPortal.Domain.Enums.ReceiptType.WalletDeposit,
+            Amount = request.Amount,
+            PaymentMode = safePaymentMode,
+            BankId = request.DestinationBankId,
+            BankName = request.DestinationName,
+            Status = "pending",
+            PaymentProof = request.PaymentProof,
+            ExternalReference = request.ExternalReference,
+            Source = "accounts_portal",
+            CreatedAt = request.ReceiptDate ?? DateTime.UtcNow,
+            UpdatedAt = DateTime.UtcNow
+        };
+
+        _db.Receipts.Add(receipt);
+        await _db.SaveChangesAsync(ct);
+
+        // Authoritatively approve the receipt through the approval orchestrator (performs FIFO allocations & wallet credit)
+        var orchestrator = HttpContext.RequestServices.GetRequiredService<TexasPortal.Application.Sales.Receipts.Approval.ReceiptApprovalOrchestrator>();
+        var approverUserId = request.SalesmanId > 0 ? request.SalesmanId : (head.CreatedBy ?? 1);
+
+        var approvalResult = await orchestrator.HandleAsync(
+            new TexasPortal.Application.Sales.Receipts.Approval.ReceiptApprovalCommand(receipt.Id, approverUserId), ct);
+
+        if (!approvalResult.IsSuccess && approvalResult.StatusCode != 200)
+        {
+            return StatusCode(approvalResult.StatusCode, new { Message = approvalResult.Message });
+        }
+
+        var details = await _readService.GetReceiptByIdAsync(receipt.Id, ct);
+        return Ok(details);
+    }
+
     // â”€â”€â”€ Dashboard Summary â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [HttpGet("dashboard/summary")]
     [ProducesResponseType(typeof(DashboardSummaryResponse), 200)]
@@ -336,6 +462,20 @@ public sealed class InternalOperationsController : ControllerBase
     public async Task<IActionResult> GetSalesmen(CancellationToken ct)
     {
         var result = await _readService.GetSalesmenAsync(ct);
+        return Ok(result);
+    }
+
+    [HttpGet("booking-financials/summary")]
+    [ProducesResponseType(typeof(TexasPortal.Contracts.Sales.Performance.OperationalBookingFinancialsSummaryResponse), 200)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> GetBookingFinancialsSummary(
+        [FromQuery] DateTime? startDate = null,
+        [FromQuery] DateTime? endDate = null,
+        [FromQuery] string? dealStatus = null,
+        long? salesmanId = null,
+        CancellationToken ct = default)
+    {
+        var result = await _readService.GetBookingFinancialsSummaryAsync(startDate, endDate, dealStatus, salesmanId, ct);
         return Ok(result);
     }
 
@@ -2605,7 +2745,7 @@ public sealed class InternalOperationsController : ControllerBase
         [FromQuery] int pageSize = 10,
         [FromQuery] string? search = null,
         [FromQuery] string? clientType = null,
-        [FromQuery] long? salesmanId = null,
+        long? salesmanId = null,
         [FromQuery] DateTime? startDate = null,
         [FromQuery] DateTime? endDate = null,
         [FromQuery] string? status = null,

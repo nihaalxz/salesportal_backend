@@ -16,7 +16,8 @@ public sealed record HeadsListQuery(
     string? SearchTerm = null,
     string SortBy = "lastName",
     string SortOrder = "asc",
-    string? Type = null);
+    string? Type = null,
+    string? CountryCode = null);
 
 public sealed record LeadsListQuery(
     int Page = 1,
@@ -117,6 +118,7 @@ public interface ISalesReadService
     Task<ProfileTargetMetricsResponse> GetProfileTargetMetricsAsync(long userId, CancellationToken ct = default);
 
     Task<PagedResponse<HeadSummaryResponse>> GetHeadsAsync(long userId, HeadsListQuery query, CancellationToken ct = default);
+    Task<List<CountryCodeOptionResponse>> GetAvailableCountryCodesAsync(long userId, string? type, CancellationToken ct = default);
     Task<HeadDetailResponse?> GetHeadByIdAsync(long userId, long headId, string? type = null, CancellationToken ct = default);
     Task<PagedResponse<HeadLedgerEntryResponse>> GetHeadLedgerAsync(long userId, long headId, int page, int pageSize, string? type = null, System.DateTime? startDate = null, System.DateTime? endDate = null, string? serviceType = null, string? search = null, string? sort = null, CancellationToken ct = default);
 

@@ -389,5 +389,9 @@ public class HotelBookingWriteTests : IClassFixture<SalesApiTestFactory>, IAsync
         var head = await db.HeadsDbSet.FindAsync(_headId);
         Assert.NotNull(head);
         Assert.Equal(-20.000m, head.Wallet);
+
+        var booking = await db.HotelBookingsDbSet.OrderByDescending(b => b.Id).FirstOrDefaultAsync(b => b.HeadId == _headId);
+        Assert.NotNull(booking);
+        Assert.Equal("success", booking.PaymentStatus);
     }
 }

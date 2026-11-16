@@ -32,9 +32,7 @@ public sealed class CreateHeadHandler
         else if (request.FirstName.Length > 255)
             errors["firstName"] = ["First name must not exceed 255 characters."];
 
-        if (string.IsNullOrWhiteSpace(request.LastName))
-            errors["lastName"] = ["Last name is required."];
-        else if (request.LastName.Length > 255)
+        if (!string.IsNullOrWhiteSpace(request.LastName) && request.LastName.Length > 255)
             errors["lastName"] = ["Last name must not exceed 255 characters."];
 
         var typeLower = (request.Type ?? "").ToLowerInvariant();
@@ -78,6 +76,15 @@ public sealed class CreateHeadHandler
             return CreateHeadResult.ValidationError(errors);
         }
 
+        // Check if mobile number already exists in Heads table (unique constraint across all salesmen)
+        var cleanMobile = request.MobileNo.Trim();
+        var mobileExists = await _db.Heads.AnyAsync(h => h.MobileNo == cleanMobile && h.DeletedAt == null, ct);
+        if (mobileExists)
+        {
+            errors["mobileNo"] = ["A customer head with this mobile number already exists."];
+            return CreateHeadResult.ValidationError(errors);
+        }
+
         // ── 2. Unique Customer Code Generation ─────────────────────────────────
         string userIdCode = "";
         var rand = new Random();
@@ -97,7 +104,7 @@ public sealed class CreateHeadHandler
             UserId = userIdCode,
             Type = typeLower,
             FirstName = request.FirstName.Trim(),
-            LastName = request.LastName.Trim(),
+            LastName = string.IsNullOrWhiteSpace(request.LastName) ? null : request.LastName.Trim(),
             MobileNo = request.MobileNo.Trim(),
             Email = request.Email.Trim(),
             Nationality = request.Nationality.Trim(),

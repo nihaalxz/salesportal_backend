@@ -48,20 +48,34 @@ public sealed class HeadsController : ControllerBase
         [FromQuery] string sortBy = "lastName",
         [FromQuery] string sortOrder = "asc",
         [FromQuery] string? type = null,
+        [FromQuery] string? countryCode = null,
         CancellationToken ct = default)
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId is not { } userId)
             return Unauthorized();
 
         if (page < 1) return BadRequest("page must be >= 1");
-        if (pageSize is < 1 or > 100) return BadRequest("pageSize must be between 1 and 100");
+        if (pageSize is < 1 or > 1000) return BadRequest("pageSize must be between 1 and 1000");
 
         var allowedSortBy = new[] { "firstName", "lastName", "wallet", "createdAt" };
         if (!allowedSortBy.Contains(sortBy, System.StringComparer.OrdinalIgnoreCase))
             return BadRequest($"sortBy must be one of: {string.Join(", ", allowedSortBy)}");
 
-        var query = new HeadsListQuery(page, pageSize, searchTerm, sortBy, sortOrder, type);
+        var query = new HeadsListQuery(page, pageSize, searchTerm, sortBy, sortOrder, type, countryCode);
         var result = await _salesReadService.GetHeadsAsync(userId, query, ct);
+        return Ok(result);
+    }
+
+    /// <summary>Lists distinct available country codes and countries for heads owned by the authenticated salesman.</summary>
+    [HttpGet("country-codes")]
+    [ProducesResponseType(typeof(System.Collections.Generic.List<CountryCodeOptionResponse>), 200)]
+    [ProducesResponseType(401)]
+    public async Task<IActionResult> GetCountryCodes([FromQuery] string? type = null, CancellationToken ct = default)
+    {
+        if (!_currentUser.IsAuthenticated || _currentUser.UserId is not { } userId)
+            return Unauthorized();
+
+        var result = await _salesReadService.GetAvailableCountryCodesAsync(userId, type, ct);
         return Ok(result);
     }
 
@@ -176,14 +190,14 @@ public sealed class HeadsController : ControllerBase
     [ProducesResponseType(401)]
     public async Task<IActionResult> LookupHeads(
         [FromQuery] string? search = null,
-        [FromQuery] int limit = 20,
+        [FromQuery] int limit = 1000,
         [FromQuery] string? type = null,
         CancellationToken ct = default)
     {
         if (!_currentUser.IsAuthenticated || _currentUser.UserId is not { } userId)
             return Unauthorized();
 
-        if (limit is < 1 or > 100) return BadRequest("limit must be between 1 and 100");
+        if (limit is < 1 or > 1000) return BadRequest("limit must be between 1 and 1000");
 
         var result = await _salesReadService.LookupHeadsAsync(userId, search, limit, type, ct);
         return Ok(result);

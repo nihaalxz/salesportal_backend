@@ -35,6 +35,8 @@ public class ReceiptSummaryResponse
     public DateTime CreatedAt { get; init; }
     public long? AgentId { get; init; }
     public string? SalesmanName { get; init; }
+    public string? BankName { get; init; }
+    public string? PaymentSource { get; init; }
 }
 
 public sealed class ReceiptAllocationDetailResponse
@@ -47,13 +49,12 @@ public sealed class ReceiptAllocationDetailResponse
     public DateTime CreatedAt { get; init; }
 }
 
-public sealed class ReceiptDetailResponse : ReceiptSummaryResponse
+public class ReceiptDetailResponse : ReceiptSummaryResponse
 {
     public string Narration { get; init; } = null!;
     public long? HeadId { get; init; }
     public long? BookingId { get; init; }
     public long? BankId { get; init; }
-    public string? BankName { get; init; }
     public string? PaymentProof { get; init; }
     public string? PaymentReference { get; init; }
     public System.Collections.Generic.List<ReceiptAllocationDetailResponse> Allocations { get; init; } = new();
@@ -67,6 +68,26 @@ public sealed class BookingOptionResponse
 }
 
 public sealed record BankResponse(long Id, string BankName, string AccountNumber);
+
+public sealed record CreateInternalReceiptRequest(
+    long SalesmanId,
+    long HeadId,
+    decimal Amount,
+    string PaymentMode,
+    long? DestinationAccountId,
+    long? DestinationBankId,
+    string? DestinationName,
+    string? Notes,
+    string? PaymentProof,
+    string ExternalReference,
+    DateTime? ReceiptDate = null
+);
+
+public sealed class InternalReceiptResponse : ReceiptDetailResponse
+{
+    public decimal HeadBalance { get; init; }
+    public decimal TotalAllocated { get; init; }
+}
 
 public sealed class SupplierResponse
 {

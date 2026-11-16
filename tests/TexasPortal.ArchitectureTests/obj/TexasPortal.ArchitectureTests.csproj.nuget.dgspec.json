@@ -1,17 +1,17 @@
 {
   "format": 1,
   "restore": {
-    "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj": {}
+    "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj": {}
   },
   "projects": {
-    "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj": {
+    "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj",
+        "projectUniqueName": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj",
         "projectName": "TexasPortal.Api",
-        "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj",
+        "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj",
         "packagesPath": "C:\\Users\\nihaa\\.nuget\\packages\\",
-        "outputPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\obj\\",
+        "outputPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -34,14 +34,14 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj"
               },
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj"
               },
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj"
               }
             }
           }
@@ -108,14 +108,14 @@
         }
       }
     },
-    "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj": {
+    "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj",
+        "projectUniqueName": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj",
         "projectName": "TexasPortal.Application",
-        "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj",
+        "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj",
         "packagesPath": "C:\\Users\\nihaa\\.nuget\\packages\\",
-        "outputPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\obj\\",
+        "outputPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -138,11 +138,11 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj"
               },
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj"
               }
             }
           }
@@ -196,14 +196,14 @@
         }
       }
     },
-    "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj": {
+    "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj",
+        "projectUniqueName": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj",
         "projectName": "TexasPortal.Contracts",
-        "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj",
+        "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj",
         "packagesPath": "C:\\Users\\nihaa\\.nuget\\packages\\",
-        "outputPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\obj\\",
+        "outputPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -271,14 +271,14 @@
         }
       }
     },
-    "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj": {
+    "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj",
+        "projectUniqueName": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj",
         "projectName": "TexasPortal.Domain",
-        "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj",
+        "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj",
         "packagesPath": "C:\\Users\\nihaa\\.nuget\\packages\\",
-        "outputPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\obj\\",
+        "outputPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -346,14 +346,14 @@
         }
       }
     },
-    "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj": {
+    "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj",
+        "projectUniqueName": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj",
         "projectName": "TexasPortal.Infrastructure",
-        "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj",
+        "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj",
         "packagesPath": "C:\\Users\\nihaa\\.nuget\\packages\\",
-        "outputPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\obj\\",
+        "outputPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -376,11 +376,11 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj"
               },
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj"
               }
             }
           }
@@ -445,14 +445,14 @@
         }
       }
     },
-    "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj": {
+    "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj": {
       "version": "1.0.0",
       "restore": {
-        "projectUniqueName": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj",
+        "projectUniqueName": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj",
         "projectName": "TexasPortal.ArchitectureTests",
-        "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj",
+        "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj",
         "packagesPath": "C:\\Users\\nihaa\\.nuget\\packages\\",
-        "outputPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\obj\\",
+        "outputPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\obj\\",
         "projectStyle": "PackageReference",
         "fallbackFolders": [
           "C:\\Program Files (x86)\\Microsoft Visual Studio\\Shared\\NuGetPackages"
@@ -475,20 +475,20 @@
           "net9.0": {
             "targetAlias": "net9.0",
             "projectReferences": {
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Api\\TexasPortal.Api.csproj"
               },
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj"
               },
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Contracts\\TexasPortal.Contracts.csproj"
               },
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Domain\\TexasPortal.Domain.csproj"
               },
-              "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj": {
-                "projectPath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj"
+              "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj": {
+                "projectPath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Infrastructure\\TexasPortal.Infrastructure.csproj"
               }
             }
           }

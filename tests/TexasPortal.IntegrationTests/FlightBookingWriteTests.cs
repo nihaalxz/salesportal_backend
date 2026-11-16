@@ -481,7 +481,9 @@ public class FlightBookingWriteTests : IClassFixture<SalesApiTestFactory>, IAsyn
             Passengers: new List<FlightPassengerRequest>
             {
                 new("Mr.", "John Passenger", 40.000m, 120.000m, false, 1) // wallet limit is 100
-            }
+            },
+            TravelDate: DateTime.UtcNow.AddDays(5),
+            AirlineCompany: "Gulf Air"
         );
 
         var httpReq = new HttpRequestMessage(HttpMethod.Post, "/api/sales/bookings/flights")
@@ -499,6 +501,10 @@ public class FlightBookingWriteTests : IClassFixture<SalesApiTestFactory>, IAsyn
         var head = await db.HeadsDbSet.FindAsync(_headAId);
         Assert.NotNull(head);
         Assert.Equal(-20.000m, head.Wallet);
+
+        var booking = await db.FlightBookingsDbSet.OrderByDescending(b => b.Id).FirstOrDefaultAsync(b => b.HeadId == _headAId);
+        Assert.NotNull(booking);
+        Assert.Equal("success", booking.PaymentStatus);
     }
 
     [Fact]

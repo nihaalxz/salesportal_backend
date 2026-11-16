@@ -272,7 +272,7 @@ public sealed class CreateHotelBookingHandler
                     Days = request.Days,
                     CheckInDate = request.CheckInDate,
                     PaymentMethod = request.PaymentMethod!,
-                    PaymentStatus = "pending",
+                    PaymentStatus = "success",
                     ProcessingStatus = statusLower,
                     OrderStatus = "pending",
                     PaymentProof = request.PaymentProof,

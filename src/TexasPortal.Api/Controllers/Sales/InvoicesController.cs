@@ -41,7 +41,16 @@ public sealed class InvoicesController : ControllerBase
         [FromRoute] long id,
         CancellationToken ct = default)
     {
-        long userId = _currentUser.UserId ?? 0;
+        long userId = 0;
+        if (User?.Identity?.IsAuthenticated == true)
+        {
+            var role = User.FindFirst(System.Security.Claims.ClaimTypes.Role)?.Value;
+            // Only restrict salesmen to their own entries; Operations, Accounts, and Admins can access all
+            if (string.Equals(role, "Salesman", System.StringComparison.OrdinalIgnoreCase))
+            {
+                userId = _currentUser.UserId ?? 0;
+            }
+        }
 
         var builder = _builderFactory.GetBuilder(entityType);
         if (builder is null)

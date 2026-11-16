@@ -10,6 +10,7 @@ D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_p
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Debug\net9.0\TexasPortal.Application.AssemblyInfoInputs.cache
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Debug\net9.0\TexasPortal.Application.AssemblyInfo.cs
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Debug\net9.0\TexasPortal.Application.csproj.CoreCompileInputs.cache
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Debug\net9.0\TexasPortal.Application.sourcelink.json
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Debug\net9.0\TexasPor.011E101C.Up2Date
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Debug\net9.0\TexasPortal.Application.dll
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Debug\net9.0\refint\TexasPortal.Application.dll

@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging;
 using Microsoft.EntityFrameworkCore;
 using System;
 using System.Linq;
@@ -23,19 +24,22 @@ public sealed class OperationsReadService : IOperationsReadService
     private readonly IAgentsApiClient _agentsApiClient;
     private readonly IOperationalAssignmentClient _assignmentClient;
     private readonly TexasPortal.Application.Sales.Services.ISupplierCostReconciliationService _reconciliationService;
+    private readonly Microsoft.Extensions.Logging.ILogger<OperationsReadService>? _logger;
 
     public OperationsReadService(
         ISalesPortalDbContext db,
         ISalesPortalDbContextFactory dbContextFactory,
         IAgentsApiClient agentsApiClient,
         IOperationalAssignmentClient assignmentClient,
-        TexasPortal.Application.Sales.Services.ISupplierCostReconciliationService reconciliationService)
+        TexasPortal.Application.Sales.Services.ISupplierCostReconciliationService reconciliationService,
+        Microsoft.Extensions.Logging.ILogger<OperationsReadService>? logger = null)
     {
         _db = db;
         _dbContextFactory = dbContextFactory;
         _agentsApiClient = agentsApiClient;
         _assignmentClient = assignmentClient;
         _reconciliationService = reconciliationService;
+        _logger = logger;
     }
 
     public async Task<IEnumerable<SalesmanResponse>> GetSalesmenAsync(CancellationToken ct)
@@ -277,6 +281,292 @@ public sealed class OperationsReadService : IOperationsReadService
 
         return list.OrderByDescending(x => x.CreatedAt);
     }
+    public async Task<List<BookingFinancialAggregate>> GetAllBookingsFinancialsAsync(DateTime? startDate = null, DateTime? endDate = null, CancellationToken ct = default)
+    {
+        using var dbFlights = _dbContextFactory.CreateDbContext();
+        using var dbHotels = _dbContextFactory.CreateDbContext();
+        using var dbVisas = _dbContextFactory.CreateDbContext();
+        using var dbVfs = _dbContextFactory.CreateDbContext();
+        using var dbHolidays = _dbContextFactory.CreateDbContext();
+        using var dbTransports = _dbContextFactory.CreateDbContext();
+        using var dbOthers = _dbContextFactory.CreateDbContext();
+
+        var flightsQuery = dbFlights.FlightBookings.AsNoTracking();
+        var hotelsQuery = dbHotels.HotelBookings.AsNoTracking();
+        var visasQuery = dbVisas.SalesVisaApplications.AsNoTracking();
+        var vfsQuery = dbVfs.VfsAppointments.AsNoTracking().Where(x => x.DeletedAt == null);
+        var holidayQuery = dbHolidays.HolidayPackages.AsNoTracking().Where(x => x.DeletedAt == null);
+        var transportQuery = dbTransports.Transportations.AsNoTracking().Where(x => x.DeletedAt == null);
+        var othersQuery = dbOthers.OtherServices.AsNoTracking().Where(x => x.DeletedAt == null);
+
+        if (startDate.HasValue)
+        {
+            var s = startDate.Value;
+            flightsQuery = flightsQuery.Where(x => x.CreatedAt >= s);
+            hotelsQuery = hotelsQuery.Where(x => x.CreatedAt >= s);
+            visasQuery = visasQuery.Where(x => x.CreatedAt >= s);
+            vfsQuery = vfsQuery.Where(x => x.CreatedAt >= s);
+            holidayQuery = holidayQuery.Where(x => x.CreatedAt >= s);
+            transportQuery = transportQuery.Where(x => x.CreatedAt >= s);
+            othersQuery = othersQuery.Where(x => x.CreatedAt >= s);
+        }
+
+        if (endDate.HasValue)
+        {
+            var e = endDate.Value;
+            flightsQuery = flightsQuery.Where(x => x.CreatedAt <= e);
+            hotelsQuery = hotelsQuery.Where(x => x.CreatedAt <= e);
+            visasQuery = visasQuery.Where(x => x.CreatedAt <= e);
+            vfsQuery = vfsQuery.Where(x => x.CreatedAt <= e);
+            holidayQuery = holidayQuery.Where(x => x.CreatedAt <= e);
+            transportQuery = transportQuery.Where(x => x.CreatedAt <= e);
+            othersQuery = othersQuery.Where(x => x.CreatedAt <= e);
+        }
+
+        static decimal CalculateBookingProfit(decimal payable, decimal expectedCost, decimal storedProfit, string? processingStatus, string? paymentStatus, decimal rejectionFee = 0m)
+        {
+            if (string.Equals(processingStatus, "cancelled", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(paymentStatus, "cancelled", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(processingStatus, "voided", StringComparison.OrdinalIgnoreCase))
+            {
+                return 0m;
+            }
+            if (string.Equals(processingStatus, "rejected", StringComparison.OrdinalIgnoreCase))
+            {
+                return rejectionFee;
+            }
+            if (storedProfit > 0m)
+            {
+                return storedProfit;
+            }
+            return Math.Max(0m, payable - expectedCost);
+        }
+
+        var flightsTask = flightsQuery
+            .Select(x => new { x.Id, x.DocumentNumber, x.UserId, x.ClientType, x.AgentId, x.PayableAmount, x.ExpectedSupplierCost, x.Profit, x.PaymentMethod, x.PaymentStatus, x.ProcessingStatus, x.CreatedAt, x.IsDealClosed })
+            .ToListAsync(ct);
+
+        var hotelsTask = hotelsQuery
+            .Select(x => new { x.Id, x.DocumentNumber, x.UserId, x.ClientType, x.AgentId, x.PayableAmount, x.ExpectedSupplierCost, x.Profit, x.PaymentMethod, x.PaymentStatus, x.ProcessingStatus, x.CreatedAt, x.IsDealClosed })
+            .ToListAsync(ct);
+
+        var visasTask = visasQuery
+            .Select(x => new { x.Id, x.DocumentNumber, x.UserId, x.ClientType, x.AgentId, x.PayableAmount, x.ExpectedSupplierCost, x.Profit, x.PaymentStatus, x.ProcessingStatus, x.CreatedAt, x.IsDealClosed, x.RejectionFee })
+            .ToListAsync(ct);
+
+        var vfsTask = vfsQuery
+            .Select(x => new { x.Id, x.DocumentNumber, x.CreatedBy, x.ClientType, x.AgentId, x.PayableAmount, x.ExpectedSupplierCost, x.Profit, x.PaymentMode, x.PaymentStatus, x.ProcessingStatus, x.CreatedAt, x.IsDealClosed })
+            .ToListAsync(ct);
+
+        var holidayTask = holidayQuery
+            .Select(x => new { x.Id, x.DocumentNumber, x.CreatedBy, x.ClientType, x.AgentId, x.PayableAmount, x.ExpectedSupplierCost, x.Profit, x.PaymentMode, x.PaymentStatus, x.ProcessingStatus, x.CreatedAt, x.IsDealClosed })
+            .ToListAsync(ct);
+
+        var transportTask = transportQuery
+            .Select(x => new { x.Id, x.DocumentNumber, x.CreatedBy, x.ClientType, x.AgentId, x.PayableAmount, x.ExpectedSupplierCost, x.Profit, x.PaymentMethod, x.PaymentStatus, x.ProcessingStatus, x.CreatedAt, x.IsDealClosed })
+            .ToListAsync(ct);
+
+        var othersTask = othersQuery
+            .Select(x => new { x.Id, x.DocumentNumber, x.CreatedBy, x.ClientType, x.AgentId, x.PayableAmount, x.ExpectedSupplierCost, x.Profit, x.PaymentMethod, x.PaymentStatus, x.ProcessingStatus, x.CreatedAt, x.IsDealClosed })
+            .ToListAsync(ct);
+
+        await Task.WhenAll(flightsTask, hotelsTask, visasTask, vfsTask, holidayTask, transportTask, othersTask);
+
+        var all = new List<BookingFinancialAggregate>();
+
+        foreach (var f in flightsTask.Result)
+        {
+            var p = CalculateBookingProfit(f.PayableAmount, f.ExpectedSupplierCost, f.Profit, f.ProcessingStatus, f.PaymentStatus, 0m);
+            all.Add(new BookingFinancialAggregate("Flight", f.Id, f.DocumentNumber, f.UserId, f.ClientType, f.AgentId, f.PayableAmount, f.ExpectedSupplierCost, p, f.PaymentMethod, f.PaymentStatus, f.ProcessingStatus, f.CreatedAt ?? DateTime.UtcNow, f.IsDealClosed));
+        }
+
+        foreach (var h in hotelsTask.Result)
+        {
+            var p = CalculateBookingProfit(h.PayableAmount, h.ExpectedSupplierCost, h.Profit, h.ProcessingStatus, h.PaymentStatus, 0m);
+            all.Add(new BookingFinancialAggregate("Hotel", h.Id, h.DocumentNumber, h.UserId, h.ClientType, h.AgentId, h.PayableAmount, h.ExpectedSupplierCost, p, h.PaymentMethod, h.PaymentStatus, h.ProcessingStatus, h.CreatedAt ?? DateTime.UtcNow, h.IsDealClosed));
+        }
+
+        foreach (var v in visasTask.Result)
+        {
+            var p = CalculateBookingProfit(v.PayableAmount, v.ExpectedSupplierCost, v.Profit, v.ProcessingStatus, v.PaymentStatus, v.RejectionFee);
+            all.Add(new BookingFinancialAggregate("Visa", v.Id, v.DocumentNumber, v.UserId, v.ClientType, v.AgentId, v.PayableAmount, v.ExpectedSupplierCost, p, null, v.PaymentStatus, v.ProcessingStatus, v.CreatedAt ?? DateTime.UtcNow, v.IsDealClosed));
+        }
+
+        foreach (var vf in vfsTask.Result)
+        {
+            var p = CalculateBookingProfit(vf.PayableAmount, vf.ExpectedSupplierCost, vf.Profit, vf.ProcessingStatus, vf.PaymentStatus, 0m);
+            all.Add(new BookingFinancialAggregate("VFS", vf.Id, vf.DocumentNumber, vf.CreatedBy, vf.ClientType, vf.AgentId, vf.PayableAmount, vf.ExpectedSupplierCost, p, vf.PaymentMode, vf.PaymentStatus, vf.ProcessingStatus, vf.CreatedAt ?? DateTime.UtcNow, vf.IsDealClosed));
+        }
+
+        foreach (var hl in holidayTask.Result)
+        {
+            var p = CalculateBookingProfit(hl.PayableAmount, hl.ExpectedSupplierCost, hl.Profit, hl.ProcessingStatus, hl.PaymentStatus, 0m);
+            all.Add(new BookingFinancialAggregate("Holiday", hl.Id, hl.DocumentNumber, hl.CreatedBy, hl.ClientType, hl.AgentId, hl.PayableAmount, hl.ExpectedSupplierCost, p, hl.PaymentMode, hl.PaymentStatus, hl.ProcessingStatus, hl.CreatedAt ?? DateTime.UtcNow, hl.IsDealClosed));
+        }
+
+        foreach (var tr in transportTask.Result)
+        {
+            var p = CalculateBookingProfit(tr.PayableAmount, tr.ExpectedSupplierCost, tr.Profit, tr.ProcessingStatus, tr.PaymentStatus, 0m);
+            all.Add(new BookingFinancialAggregate("Transport", tr.Id, tr.DocumentNumber, tr.CreatedBy, tr.ClientType, tr.AgentId, tr.PayableAmount, tr.ExpectedSupplierCost, p, tr.PaymentMethod, tr.PaymentStatus, tr.ProcessingStatus, tr.CreatedAt ?? DateTime.UtcNow, tr.IsDealClosed));
+        }
+
+        foreach (var ot in othersTask.Result)
+        {
+            var p = CalculateBookingProfit(ot.PayableAmount, ot.ExpectedSupplierCost, ot.Profit, ot.ProcessingStatus, ot.PaymentStatus, 0m);
+            all.Add(new BookingFinancialAggregate("Other", ot.Id, ot.DocumentNumber, ot.CreatedBy, ot.ClientType, ot.AgentId, ot.PayableAmount, ot.ExpectedSupplierCost, p, ot.PaymentMethod, ot.PaymentStatus, ot.ProcessingStatus, ot.CreatedAt ?? DateTime.UtcNow, ot.IsDealClosed));
+        }
+
+        return all;
+    }
+
+    public async Task<TexasPortal.Contracts.Sales.Performance.OperationalBookingFinancialsSummaryResponse> GetBookingFinancialsSummaryAsync(
+        DateTime? startDate = null,
+        DateTime? endDate = null,
+        string? dealStatus = null,
+        long? salesmanId = null,
+        CancellationToken ct = default)
+    {
+        var allBookings = await GetAllBookingsFinancialsAsync(startDate, endDate, ct);
+
+        if (salesmanId.HasValue)
+        {
+            using var dbSalesmen = _dbContextFactory.CreateDbContext();
+            var salesmen = await dbSalesmen.Users
+                .AsNoTracking()
+                .Where(x => x.IsActive && (x.UserType == null || x.UserType != "Guest"))
+                .ToListAsync(ct);
+            var activeSalesmanIds = new HashSet<long>(salesmen.Select(x => x.Id));
+
+            var agentSalesmanMap = new System.Collections.Concurrent.ConcurrentDictionary<long, long>();
+            if (salesmen.Any())
+            {
+                var agentTasks = salesmen.Select(async s =>
+                {
+                    try
+                    {
+                        var agents = await _agentsApiClient.GetAgentsAsync(s.Id, null, 10000, ct);
+                        if (agents != null)
+                        {
+                            foreach (var a in agents)
+                            {
+                                agentSalesmanMap[a.Id] = s.Id;
+                            }
+                        }
+                    }
+                    catch
+                    {
+                        // Ignore individual agent fetch failures in mapping
+                    }
+                });
+                await Task.WhenAll(agentTasks);
+            }
+
+            long ResolveSalesmanId(BookingFinancialAggregate b)
+            {
+                if (activeSalesmanIds.Contains(b.CreatorId))
+                    return b.CreatorId;
+
+                if (string.Equals(b.ClientType, "agent", StringComparison.OrdinalIgnoreCase) && b.AgentId.HasValue && agentSalesmanMap.TryGetValue(b.AgentId.Value, out var aSalesmanId) && activeSalesmanIds.Contains(aSalesmanId))
+                {
+                    return aSalesmanId;
+                }
+
+                return 0; // Unassigned
+            }
+
+            allBookings = allBookings.Where(b => ResolveSalesmanId(b) == salesmanId.Value).ToList();
+        }
+
+        var isClosedOnly = string.Equals(dealStatus, "closed_only", StringComparison.OrdinalIgnoreCase);
+        var isOpenOnly = string.Equals(dealStatus, "open_only", StringComparison.OrdinalIgnoreCase);
+
+        if (isClosedOnly)
+        {
+            allBookings = allBookings.Where(b => b.IsDealClosed).ToList();
+        }
+        else if (isOpenOnly)
+        {
+            allBookings = allBookings.Where(b => !b.IsDealClosed).ToList();
+        }
+
+        using var dbProfit = _dbContextFactory.CreateDbContext();
+        var profitQuery = dbProfit.SalesmanProfitRecords.AsNoTracking().Where(x => x.IsFinal);
+        if (startDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt >= startDate.Value);
+        if (endDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt <= endDate.Value);
+        if (salesmanId.HasValue) profitQuery = profitQuery.Where(x => x.SalesmanId == salesmanId.Value);
+        var finalProfitRecords = await profitQuery
+            .Select(x => new { x.SalesmanId, x.BookingType, x.ProfitAmount })
+            .ToListAsync(ct);
+
+        var serviceDefinitions = new (string Type, string Label)[]
+        {
+            ("Flight", "Flights"),
+            ("Hotel", "Hotels"),
+            ("Visa", "Visas"),
+            ("Holiday", "Holiday Packages"),
+            ("VFS", "VFS Appointments"),
+            ("Transport", "Transportation"),
+            ("Other", "Other Services")
+        };
+
+        var serviceBreakdown = new List<TexasPortal.Contracts.Sales.Performance.ServiceBookingFinancialItem>();
+
+        foreach (var def in serviceDefinitions)
+        {
+            var items = allBookings.Where(x => x.ServiceType == def.Type).ToList();
+            var sales = items.Sum(x => x.PayableAmount);
+            var cost = items.Sum(x => x.ExpectedSupplierCost);
+            var profit = items.Sum(x => x.ExpectedProfit);
+
+            decimal finalProfit;
+            if (isOpenOnly)
+            {
+                finalProfit = 0m;
+            }
+            else if (isClosedOnly)
+            {
+                finalProfit = profit;
+            }
+            else
+            {
+                finalProfit = finalProfitRecords.Where(x => x.BookingType == def.Type).Sum(x => x.ProfitAmount);
+            }
+
+            serviceBreakdown.Add(new TexasPortal.Contracts.Sales.Performance.ServiceBookingFinancialItem
+            {
+                ServiceType = def.Type,
+                ServiceLabel = def.Label,
+                BookingCount = items.Count,
+                SalesAmount = sales,
+                CostAmount = cost,
+                ProfitAmount = profit,
+                FinalProfitAmount = finalProfit
+            });
+        }
+
+        var totalBookings = allBookings.Count;
+        var totalSales = allBookings.Sum(x => x.PayableAmount);
+        var totalCost = allBookings.Sum(x => x.ExpectedSupplierCost);
+        var totalProfit = allBookings.Sum(x => x.ExpectedProfit);
+        var totalFinalProfit = serviceBreakdown.Sum(x => x.FinalProfitAmount);
+        var totalEstimatedProfit = Math.Max(0m, totalProfit - totalFinalProfit);
+
+        return new TexasPortal.Contracts.Sales.Performance.OperationalBookingFinancialsSummaryResponse
+        {
+            StartDate = startDate,
+            EndDate = endDate,
+            DealStatus = dealStatus ?? "all",
+            SalesmanId = salesmanId,
+            TotalBookingsCount = totalBookings,
+            TotalSalesValue = totalSales,
+            TotalSupplierCost = totalCost,
+            TotalGrossProfit = totalProfit,
+            TotalFinalProfit = totalFinalProfit,
+            TotalEstimatedProfit = totalEstimatedProfit,
+            ServiceBreakdown = serviceBreakdown
+        };
+    }
+
     public async Task<IEnumerable<SalesmanReportResponse>> GetSalesmenReportAsync(DateTime? startDate = null, DateTime? endDate = null, CancellationToken ct = default)
     {
         using var dbSalesmen = _dbContextFactory.CreateDbContext();
@@ -291,85 +581,32 @@ public sealed class OperationsReadService : IOperationsReadService
             return Array.Empty<SalesmanReportResponse>();
         }
 
+        var allBookings = await GetAllBookingsFinancialsAsync(startDate, endDate, ct);
+
+        // Structured logging for financial anomalies (non-zero sales and costs but zero expected profit)
+        if (_logger != null)
+        {
+            foreach (var b in allBookings)
+            {
+                if (b.PayableAmount > 0m && b.ExpectedSupplierCost > 0m && b.ExpectedProfit == 0m &&
+                    !string.Equals(b.ProcessingStatus, "cancelled", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(b.ProcessingStatus, "rejected", StringComparison.OrdinalIgnoreCase) &&
+                    !string.Equals(b.ProcessingStatus, "voided", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("Booking financial anomaly: Service {Service} #{BookingId} ({DocNo}) has Payable={Payable}, Cost={Cost}, but Profit=0",
+                        b.ServiceType, b.BookingId, b.DocumentNumber, b.PayableAmount, b.ExpectedSupplierCost);
+                }
+            }
+        }
+
         using var dbLeads = _dbContextFactory.CreateDbContext();
-        using var dbFlights = _dbContextFactory.CreateDbContext();
-        using var dbHotels = _dbContextFactory.CreateDbContext();
-        using var dbVisas = _dbContextFactory.CreateDbContext();
-        using var dbVfs = _dbContextFactory.CreateDbContext();
-        using var dbHolidays = _dbContextFactory.CreateDbContext();
-        using var dbTransports = _dbContextFactory.CreateDbContext();
-        using var dbOthers = _dbContextFactory.CreateDbContext();
-
         var leadsQuery = dbLeads.Leads.AsNoTracking().Where(x => x.DeletedAt == null);
-        var flightsQuery = dbFlights.FlightBookings.AsNoTracking();
-        var hotelsQuery = dbHotels.HotelBookings.AsNoTracking();
-        var visasQuery = dbVisas.SalesVisaApplications.AsNoTracking();
-        var vfsQuery = dbVfs.VfsAppointments.AsNoTracking().Where(x => x.DeletedAt == null);
-        var holidayQuery = dbHolidays.HolidayPackages.AsNoTracking().Where(x => x.DeletedAt == null);
-        var transportQuery = dbTransports.Transportations.AsNoTracking().Where(x => x.DeletedAt == null);
-        var othersQuery = dbOthers.OtherServices.AsNoTracking().Where(x => x.DeletedAt == null);
-
-        if (startDate.HasValue)
-        {
-            var s = startDate.Value;
-            leadsQuery = leadsQuery.Where(x => x.CreatedAt >= s);
-            flightsQuery = flightsQuery.Where(x => x.CreatedAt >= s);
-            hotelsQuery = hotelsQuery.Where(x => x.CreatedAt >= s);
-            visasQuery = visasQuery.Where(x => x.CreatedAt >= s);
-            vfsQuery = vfsQuery.Where(x => x.CreatedAt >= s);
-            holidayQuery = holidayQuery.Where(x => x.CreatedAt >= s);
-            transportQuery = transportQuery.Where(x => x.CreatedAt >= s);
-            othersQuery = othersQuery.Where(x => x.CreatedAt >= s);
-        }
-
-        if (endDate.HasValue)
-        {
-            var e = endDate.Value;
-            leadsQuery = leadsQuery.Where(x => x.CreatedAt <= e);
-            flightsQuery = flightsQuery.Where(x => x.CreatedAt <= e);
-            hotelsQuery = hotelsQuery.Where(x => x.CreatedAt <= e);
-            visasQuery = visasQuery.Where(x => x.CreatedAt <= e);
-            vfsQuery = vfsQuery.Where(x => x.CreatedAt <= e);
-            holidayQuery = holidayQuery.Where(x => x.CreatedAt <= e);
-            transportQuery = transportQuery.Where(x => x.CreatedAt <= e);
-            othersQuery = othersQuery.Where(x => x.CreatedAt <= e);
-        }
-
-        var leadsTask = leadsQuery
+        if (startDate.HasValue) leadsQuery = leadsQuery.Where(x => x.CreatedAt >= startDate.Value);
+        if (endDate.HasValue) leadsQuery = leadsQuery.Where(x => x.CreatedAt <= endDate.Value);
+        var leadsCounts = await leadsQuery
             .GroupBy(x => x.CreatedBy)
             .Select(g => new { CreatorId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.CreatorId, x => x.Count, ct);
-
-        // Fetch raw data for all services and aggregate in memory to avoid EF Core GroupBy translation issues
-        var flights = await flightsQuery
-            .Select(x => new { x.UserId, x.PayableAmount, x.Profit, x.PaymentMethod, x.PaymentStatus })
-            .ToListAsync(ct);
-
-        var hotels = await hotelsQuery
-            .Select(x => new { x.UserId, x.PayableAmount, x.Profit, x.PaymentMethod, x.PaymentStatus })
-            .ToListAsync(ct);
-
-        var visas = await visasQuery
-            .Select(x => new { x.UserId, x.PayableAmount, x.Profit, x.PaymentStatus })
-            .ToListAsync(ct);
-
-        var vfs = await vfsQuery
-            .Select(x => new { UserId = x.CreatedBy, x.PayableAmount, x.Profit, PaymentMethod = x.PaymentMode, x.PaymentStatus })
-            .ToListAsync(ct);
-
-        var holidays = await holidayQuery
-            .Select(x => new { UserId = x.CreatedBy, x.PayableAmount, x.Profit, PaymentMethod = x.PaymentMode, x.PaymentStatus })
-            .ToListAsync(ct);
-
-        var transports = await transportQuery
-            .Select(x => new { UserId = x.CreatedBy, x.PayableAmount, x.Profit, x.PaymentMethod, x.PaymentStatus })
-            .ToListAsync(ct);
-
-        var others = await othersQuery
-            .Select(x => new { UserId = x.CreatedBy, x.PayableAmount, x.Profit, x.PaymentMethod, x.PaymentStatus })
-            .ToListAsync(ct);
-
-        var leadsCounts = await leadsTask;
 
         using var dbHeads = _dbContextFactory.CreateDbContext();
         var customerNegativeBalances = await dbHeads.Heads.AsNoTracking()
@@ -378,64 +615,77 @@ public sealed class OperationsReadService : IOperationsReadService
             .Select(g => new { SalesmanId = g.Key, Amount = g.Sum(x => -x.Wallet) })
             .ToDictionaryAsync(x => x.SalesmanId, x => x.Amount, ct);
 
-        static bool IsUnpaid(string? paymentMethod, string? paymentStatus)
-        {
-            var mLower = paymentMethod?.ToLower();
-            var sLower = paymentStatus?.ToLower();
-            return (mLower == "credit") || (sLower == "pending" || sLower == "unpaid" || sLower == "credit" || sLower == "partial");
-        }
-
+        var agentSalesmanMap = new System.Collections.Concurrent.ConcurrentDictionary<long, long>();
         var agentTasks = salesmen.Select(async s =>
         {
             try
             {
                 var agents = await _agentsApiClient.GetAgentsAsync(s.Id, null, 10000, ct);
+                if (agents != null)
+                {
+                    foreach (var a in agents)
+                    {
+                        agentSalesmanMap[a.Id] = s.Id;
+                    }
+                }
                 var sum = agents != null ? agents.Where(a => a.Wallet < 0).Sum(a => -a.Wallet) : 0m;
                 return new { SalesmanId = s.Id, Amount = sum };
             }
-            catch
+            catch (Exception ex)
             {
-                return new { SalesmanId = s.Id, Amount = 0m };
+                _logger?.LogError(ex, "Failed to load agent receivables for salesman {SalesmanId}", s.Id);
+                throw;
             }
         });
         var agentResults = await Task.WhenAll(agentTasks);
         var agentNegativeBalances = agentResults.GroupBy(x => x.SalesmanId).ToDictionary(g => g.Key, g => g.Sum(x => x.Amount));
 
+        var activeSalesmanIds = new HashSet<long>(salesmen.Select(x => x.Id));
+        long ResolveSalesmanId(BookingFinancialAggregate b)
+        {
+            if (activeSalesmanIds.Contains(b.CreatorId))
+                return b.CreatorId;
+
+            if (string.Equals(b.ClientType, "agent", StringComparison.OrdinalIgnoreCase) && b.AgentId.HasValue && agentSalesmanMap.TryGetValue(b.AgentId.Value, out var aSalesmanId) && activeSalesmanIds.Contains(aSalesmanId))
+            {
+                return aSalesmanId;
+            }
+
+            return 0; // Unassigned
+        }
+
+        var bookingsBySalesman = allBookings.GroupBy(ResolveSalesmanId).ToDictionary(g => g.Key, g => g.ToList());
+
         using var dbProfit = _dbContextFactory.CreateDbContext();
-        var profitQuery = dbProfit.SalesmanProfitRecords.AsNoTracking();
+        var profitQuery = dbProfit.SalesmanProfitRecords.AsNoTracking().Where(x => x.IsFinal);
         if (startDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt >= startDate.Value);
         if (endDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt <= endDate.Value);
-        var profitRecords = await profitQuery
-            .Select(x => new { x.SalesmanId, x.BookingType, x.ProfitAmount, x.IsFinal })
+        var finalProfitRecords = await profitQuery
+            .Select(x => new { x.SalesmanId, x.BookingType, x.ProfitAmount })
             .ToListAsync(ct);
 
         var report = new List<SalesmanReportResponse>();
+
         foreach (var salesman in salesmen)
         {
             var sid = salesman.Id;
             var leadsCount = leadsCounts.GetValueOrDefault(sid, 0);
 
-            var flightItems = flights.Where(x => x.UserId == sid).ToList();
-            var hotelItems = hotels.Where(x => x.UserId == sid).ToList();
-            var visaItems = visas.Where(x => x.UserId == sid).ToList();
-            var vfsItems = vfs.Where(x => x.UserId == sid).ToList();
-            var holidayItems = holidays.Where(x => x.UserId == sid).ToList();
-            var transportItems = transports.Where(x => x.UserId == sid).ToList();
-            var otherItems = others.Where(x => x.UserId == sid).ToList();
+            var sBookings = bookingsBySalesman.GetValueOrDefault(sid, new List<BookingFinancialAggregate>());
 
-            var sProfits = profitRecords.Where(x => x.SalesmanId == sid).ToList();
-            var totalProfit = sProfits.Sum(x => x.ProfitAmount);
-            var flightProfit = sProfits.Where(x => x.BookingType == "Flight").Sum(x => x.ProfitAmount);
-            var hotelProfit = sProfits.Where(x => x.BookingType == "Hotel").Sum(x => x.ProfitAmount);
-            var visaProfit = sProfits.Where(x => x.BookingType == "Visa").Sum(x => x.ProfitAmount);
-            var vfsProfit = sProfits.Where(x => x.BookingType == "VFS").Sum(x => x.ProfitAmount);
-            var holidayProfit = sProfits.Where(x => x.BookingType == "Holiday").Sum(x => x.ProfitAmount);
-            var transportProfit = sProfits.Where(x => x.BookingType == "Transport").Sum(x => x.ProfitAmount);
-            var otherProfit = sProfits.Where(x => x.BookingType == "Other").Sum(x => x.ProfitAmount);
+            var flightItems = sBookings.Where(x => x.ServiceType == "Flight").ToList();
+            var hotelItems = sBookings.Where(x => x.ServiceType == "Hotel").ToList();
+            var visaItems = sBookings.Where(x => x.ServiceType == "Visa").ToList();
+            var vfsItems = sBookings.Where(x => x.ServiceType == "VFS").ToList();
+            var holidayItems = sBookings.Where(x => x.ServiceType == "Holiday").ToList();
+            var transportItems = sBookings.Where(x => x.ServiceType == "Transport").ToList();
+            var otherItems = sBookings.Where(x => x.ServiceType == "Other").ToList();
 
-            var totalEntries = flightItems.Count + hotelItems.Count + visaItems.Count + vfsItems.Count + holidayItems.Count + transportItems.Count + otherItems.Count;
-            var totalSalesValue = flightItems.Sum(x => x.PayableAmount) + hotelItems.Sum(x => x.PayableAmount) + visaItems.Sum(x => x.PayableAmount)
-                                + vfsItems.Sum(x => x.PayableAmount) + holidayItems.Sum(x => x.PayableAmount) + transportItems.Sum(x => x.PayableAmount) + otherItems.Sum(x => x.PayableAmount);
+            var totalSalesValue = sBookings.Sum(x => x.PayableAmount);
+            var totalExpectedProfit = sBookings.Sum(x => x.ExpectedProfit);
+
+            var sFinalProfits = finalProfitRecords.Where(x => x.SalesmanId == sid).ToList();
+            var totalFinalProfit = sFinalProfits.Sum(x => x.ProfitAmount);
 
             var customerCredit = customerNegativeBalances.GetValueOrDefault(sid, 0m);
             var agentCredit = agentNegativeBalances.GetValueOrDefault(sid, 0m);
@@ -447,35 +697,641 @@ public sealed class OperationsReadService : IOperationsReadService
                 Name = salesman.Name,
                 Email = salesman.Email,
                 LeadsCount = leadsCount,
-                BookingsCount = totalEntries,
+                BookingsCount = sBookings.Count,
                 TotalSalesValue = totalSalesValue,
-                TotalProfit = totalProfit,
+                TotalProfit = totalExpectedProfit,
+                TotalFinalProfit = totalFinalProfit,
                 CreditToCollect = creditToCollect,
                 FlightCount = flightItems.Count,
                 FlightSales = flightItems.Sum(x => x.PayableAmount),
-                FlightProfit = flightProfit,
+                FlightProfit = flightItems.Sum(x => x.ExpectedProfit),
+                FlightFinalProfit = sFinalProfits.Where(x => x.BookingType == "Flight").Sum(x => x.ProfitAmount),
                 HotelCount = hotelItems.Count,
                 HotelSales = hotelItems.Sum(x => x.PayableAmount),
-                HotelProfit = hotelProfit,
+                HotelProfit = hotelItems.Sum(x => x.ExpectedProfit),
+                HotelFinalProfit = sFinalProfits.Where(x => x.BookingType == "Hotel").Sum(x => x.ProfitAmount),
                 VisaCount = visaItems.Count,
                 VisaSales = visaItems.Sum(x => x.PayableAmount),
-                VisaProfit = visaProfit,
+                VisaProfit = visaItems.Sum(x => x.ExpectedProfit),
+                VisaFinalProfit = sFinalProfits.Where(x => x.BookingType == "Visa").Sum(x => x.ProfitAmount),
                 VfsCount = vfsItems.Count,
                 VfsSales = vfsItems.Sum(x => x.PayableAmount),
-                VfsProfit = vfsProfit,
+                VfsProfit = vfsItems.Sum(x => x.ExpectedProfit),
+                VfsFinalProfit = sFinalProfits.Where(x => x.BookingType == "VFS").Sum(x => x.ProfitAmount),
                 HolidayCount = holidayItems.Count,
                 HolidaySales = holidayItems.Sum(x => x.PayableAmount),
-                HolidayProfit = holidayProfit,
+                HolidayProfit = holidayItems.Sum(x => x.ExpectedProfit),
+                HolidayFinalProfit = sFinalProfits.Where(x => x.BookingType == "Holiday").Sum(x => x.ProfitAmount),
                 TransportCount = transportItems.Count,
                 TransportSales = transportItems.Sum(x => x.PayableAmount),
-                TransportProfit = transportProfit,
+                TransportProfit = transportItems.Sum(x => x.ExpectedProfit),
+                TransportFinalProfit = sFinalProfits.Where(x => x.BookingType == "Transport").Sum(x => x.ProfitAmount),
                 OtherCount = otherItems.Count,
                 OtherSales = otherItems.Sum(x => x.PayableAmount),
-                OtherProfit = otherProfit
+                OtherProfit = otherItems.Sum(x => x.ExpectedProfit),
+                OtherFinalProfit = sFinalProfits.Where(x => x.BookingType == "Other").Sum(x => x.ProfitAmount)
             });
         }
 
-        return report;
+        // Include Unassigned row if any bookings are not matched to active salesmen
+        if (bookingsBySalesman.TryGetValue(0, out var unassignedBookings) && unassignedBookings.Count > 0)
+        {
+            var uFinalProfits = finalProfitRecords.Where(x => x.SalesmanId == 0).ToList();
+            report.Add(new SalesmanReportResponse
+            {
+                Id = 0,
+                Name = "Unassigned",
+                Email = "unassigned@system",
+                LeadsCount = 0,
+                BookingsCount = unassignedBookings.Count,
+                TotalSalesValue = unassignedBookings.Sum(x => x.PayableAmount),
+                TotalProfit = unassignedBookings.Sum(x => x.ExpectedProfit),
+                TotalFinalProfit = uFinalProfits.Sum(x => x.ProfitAmount),
+                CreditToCollect = 0m,
+                FlightCount = unassignedBookings.Count(x => x.ServiceType == "Flight"),
+                FlightSales = unassignedBookings.Where(x => x.ServiceType == "Flight").Sum(x => x.PayableAmount),
+                FlightProfit = unassignedBookings.Where(x => x.ServiceType == "Flight").Sum(x => x.ExpectedProfit),
+                FlightFinalProfit = uFinalProfits.Where(x => x.BookingType == "Flight").Sum(x => x.ProfitAmount),
+                HotelCount = unassignedBookings.Count(x => x.ServiceType == "Hotel"),
+                HotelSales = unassignedBookings.Where(x => x.ServiceType == "Hotel").Sum(x => x.PayableAmount),
+                HotelProfit = unassignedBookings.Where(x => x.ServiceType == "Hotel").Sum(x => x.ExpectedProfit),
+                HotelFinalProfit = uFinalProfits.Where(x => x.BookingType == "Hotel").Sum(x => x.ProfitAmount),
+                VisaCount = unassignedBookings.Count(x => x.ServiceType == "Visa"),
+                VisaSales = unassignedBookings.Where(x => x.ServiceType == "Visa").Sum(x => x.PayableAmount),
+                VisaProfit = unassignedBookings.Where(x => x.ServiceType == "Visa").Sum(x => x.ExpectedProfit),
+                VisaFinalProfit = uFinalProfits.Where(x => x.BookingType == "Visa").Sum(x => x.ProfitAmount),
+                VfsCount = unassignedBookings.Count(x => x.ServiceType == "VFS"),
+                VfsSales = unassignedBookings.Where(x => x.ServiceType == "VFS").Sum(x => x.PayableAmount),
+                VfsProfit = unassignedBookings.Where(x => x.ServiceType == "VFS").Sum(x => x.ExpectedProfit),
+                VfsFinalProfit = uFinalProfits.Where(x => x.BookingType == "VFS").Sum(x => x.ProfitAmount),
+                HolidayCount = unassignedBookings.Count(x => x.ServiceType == "Holiday"),
+                HolidaySales = unassignedBookings.Where(x => x.ServiceType == "Holiday").Sum(x => x.PayableAmount),
+                HolidayProfit = unassignedBookings.Where(x => x.ServiceType == "Holiday").Sum(x => x.ExpectedProfit),
+                HolidayFinalProfit = uFinalProfits.Where(x => x.BookingType == "Holiday").Sum(x => x.ProfitAmount),
+                TransportCount = unassignedBookings.Count(x => x.ServiceType == "Transport"),
+                TransportSales = unassignedBookings.Where(x => x.ServiceType == "Transport").Sum(x => x.PayableAmount),
+                TransportProfit = unassignedBookings.Where(x => x.ServiceType == "Transport").Sum(x => x.ExpectedProfit),
+                TransportFinalProfit = uFinalProfits.Where(x => x.BookingType == "Transport").Sum(x => x.ProfitAmount),
+                OtherCount = unassignedBookings.Count(x => x.ServiceType == "Other"),
+                OtherSales = unassignedBookings.Where(x => x.ServiceType == "Other").Sum(x => x.PayableAmount),
+                OtherProfit = unassignedBookings.Where(x => x.ServiceType == "Other").Sum(x => x.ExpectedProfit),
+                OtherFinalProfit = uFinalProfits.Where(x => x.BookingType == "Other").Sum(x => x.ProfitAmount)
+            });
+        }
+
+        // Reconciliation Check: Sum of salesman rows must equal the total expected profit for the same filters
+        var totalAllExpectedProfit = allBookings.Sum(x => x.ExpectedProfit);
+        var totalReportExpectedProfit = report.Sum(x => x.TotalProfit);
+        var reconciliationDifference = Math.Abs(totalAllExpectedProfit - totalReportExpectedProfit);
+        var isReconciled = reconciliationDifference < 0.001m;
+
+        return report.Select(r => new SalesmanReportResponse
+        {
+            Id = r.Id,
+            Name = r.Name,
+            Email = r.Email,
+            LeadsCount = r.LeadsCount,
+            BookingsCount = r.BookingsCount,
+            TotalSalesValue = r.TotalSalesValue,
+            TotalProfit = r.TotalProfit,
+            TotalFinalProfit = r.TotalFinalProfit,
+            FlightCount = r.FlightCount,
+            FlightSales = r.FlightSales,
+            FlightProfit = r.FlightProfit,
+            FlightFinalProfit = r.FlightFinalProfit,
+            HotelCount = r.HotelCount,
+            HotelSales = r.HotelSales,
+            HotelProfit = r.HotelProfit,
+            HotelFinalProfit = r.HotelFinalProfit,
+            VisaCount = r.VisaCount,
+            VisaSales = r.VisaSales,
+            VisaProfit = r.VisaProfit,
+            VisaFinalProfit = r.VisaFinalProfit,
+            VfsCount = r.VfsCount,
+            VfsSales = r.VfsSales,
+            VfsProfit = r.VfsProfit,
+            VfsFinalProfit = r.VfsFinalProfit,
+            HolidayCount = r.HolidayCount,
+            HolidaySales = r.HolidaySales,
+            HolidayProfit = r.HolidayProfit,
+            HolidayFinalProfit = r.HolidayFinalProfit,
+            TransportCount = r.TransportCount,
+            TransportSales = r.TransportSales,
+            TransportProfit = r.TransportProfit,
+            TransportFinalProfit = r.TransportFinalProfit,
+            OtherCount = r.OtherCount,
+            OtherSales = r.OtherSales,
+            OtherProfit = r.OtherProfit,
+            OtherFinalProfit = r.OtherFinalProfit,
+            CreditToCollect = r.CreditToCollect,
+            IsReconciled = isReconciled,
+            ReconciliationDifference = reconciliationDifference
+        }).ToList();
+    }
+
+    public async Task<PagedResponse<OpenDealEntryResponse>> GetOpenDealsAsync(
+        int page, int pageSize, string? serviceType = null, string? search = null,
+        long? salesmanId = null, string? paymentStatus = null,
+        DateTime? startDate = null, DateTime? endDate = null,
+        CancellationToken ct = default)
+    {
+        var allDeals = await FetchOpenDealsInternalAsync(serviceType, search, salesmanId, paymentStatus, startDate, endDate, ct);
+
+        var totalCount = allDeals.Count;
+        var currentPage = page <= 0 ? 1 : page;
+        var currentPageSize = pageSize <= 0 ? 20 : pageSize;
+
+        var pagedItems = allDeals
+            .Skip((currentPage - 1) * currentPageSize)
+            .Take(currentPageSize)
+            .ToList();
+
+        return PagedResponse<OpenDealEntryResponse>.Create(pagedItems, totalCount, currentPage, currentPageSize);
+    }
+
+    public async Task<OpenDealsSummaryResponse> GetOpenDealsSummaryAsync(
+        string? serviceType = null, string? search = null,
+        long? salesmanId = null, string? paymentStatus = null,
+        DateTime? startDate = null, DateTime? endDate = null,
+        CancellationToken ct = default)
+    {
+        var allDeals = await FetchOpenDealsInternalAsync(serviceType, search, salesmanId, paymentStatus, startDate, endDate, ct);
+
+        var breakdown = allDeals
+            .GroupBy(x => x.ServiceType)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        return new OpenDealsSummaryResponse
+        {
+            TotalOpenDeals = allDeals.Count,
+            TotalSalesValue = allDeals.Sum(x => x.PayableAmount),
+            TotalExpectedCost = allDeals.Sum(x => x.ExpectedSupplierCost),
+            TotalExpectedProfit = allDeals.Sum(x => x.ExpectedProfit),
+            ServiceBreakdown = breakdown
+        };
+    }
+
+    private async Task<List<OpenDealEntryResponse>> FetchOpenDealsInternalAsync(
+        string? serviceType, string? search,
+        long? salesmanId, string? paymentStatus,
+        DateTime? startDate, DateTime? endDate,
+        CancellationToken ct)
+    {
+        using var dbSalesmen = _dbContextFactory.CreateDbContext();
+        var salesmanMap = await dbSalesmen.Users.AsNoTracking().ToDictionaryAsync(u => u.Id, u => u.Name, ct);
+
+        var st = serviceType?.Trim().ToLowerInvariant();
+        bool queryAll = string.IsNullOrWhiteSpace(st) || st == "all";
+
+        var deals = new List<OpenDealEntryResponse>();
+        var term = search?.Trim().ToLower();
+        var pStatus = (!string.IsNullOrWhiteSpace(paymentStatus) && !string.Equals(paymentStatus, "all", StringComparison.OrdinalIgnoreCase))
+            ? paymentStatus.Trim().ToLower()
+            : null;
+
+        DateTime? endOfDay = endDate.HasValue ? endDate.Value.Date.AddDays(1).AddTicks(-1) : null;
+
+        static decimal CalcProfit(decimal payable, decimal cost, decimal storedProfit, string? procStatus, string? payStatus, decimal rejFee = 0m)
+        {
+            if (string.Equals(procStatus, "cancelled", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(payStatus, "cancelled", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(procStatus, "voided", StringComparison.OrdinalIgnoreCase))
+            {
+                return 0m;
+            }
+            if (string.Equals(procStatus, "rejected", StringComparison.OrdinalIgnoreCase))
+            {
+                return rejFee;
+            }
+            if (storedProfit > 0m)
+            {
+                return storedProfit;
+            }
+            return Math.Max(0m, payable - cost);
+        }
+
+        // 1. Flights
+        if (queryAll || st == "flight" || st == "flights")
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+            var q = db.FlightBookings.AsNoTracking()
+                .Include(x => x.Head)
+                .Include(x => x.Passengers)
+                .Where(x => !x.IsDealClosed &&
+                            (x.PaymentStatus == null || x.PaymentStatus.ToLower() != "cancelled") &&
+                            (x.ProcessingStatus == null || (x.ProcessingStatus.ToLower() != "cancelled" && x.ProcessingStatus.ToLower() != "voided")));
+
+            if (salesmanId.HasValue) q = q.Where(x => x.UserId == salesmanId.Value);
+            if (pStatus != null) q = q.Where(x => x.PaymentStatus != null && x.PaymentStatus.ToLower() == pStatus);
+            if (startDate.HasValue) q = q.Where(x => x.CreatedAt >= startDate.Value);
+            if (endOfDay.HasValue) q = q.Where(x => x.CreatedAt <= endOfDay.Value);
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
+                    (x.FromLocation != null && x.FromLocation.ToLower().Contains(term)) ||
+                    (x.ToLocation != null && x.ToLocation.ToLower().Contains(term)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
+                    (x.Agent != null && x.Agent.ToLower().Contains(term)) ||
+                    x.Passengers.Any(p => p.PassengerName.ToLower().Contains(term)));
+            }
+
+            var list = await q.ToListAsync(ct);
+            foreach (var f in list)
+            {
+                var passNames = f.Passengers?.Select(p => p.PassengerName).Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
+                var details = $"{f.FromLocation} -> {f.ToLocation}";
+                if (passNames.Count > 1) details += $" ({passNames.Count} pax)";
+                else if (passNames.Count == 1) details += $" ({passNames[0]})";
+
+                var headName = f.Head != null ? (f.Head.FirstName + " " + f.Head.LastName).Trim() : f.Agent;
+                salesmanMap.TryGetValue(f.UserId, out var smName);
+
+                deals.Add(new OpenDealEntryResponse
+                {
+                    Id = f.Id,
+                    ServiceType = "Flight",
+                    DocumentNumber = f.DocumentNumber,
+                    CreatedAt = f.CreatedAt ?? DateTime.UtcNow,
+                    HeadId = f.HeadId,
+                    HeadName = headName,
+                    ClientType = f.ClientType,
+                    SalesmanId = f.UserId,
+                    SalesmanName = smName ?? "Salesman #" + f.UserId,
+                    MainDetails = details,
+                    PayableAmount = f.PayableAmount,
+                    ExpectedSupplierCost = f.ExpectedSupplierCost,
+                    ExpectedProfit = CalcProfit(f.PayableAmount, f.ExpectedSupplierCost, f.Profit, f.ProcessingStatus, f.PaymentStatus),
+                    PaymentMethod = f.PaymentMethod,
+                    PaymentStatus = f.PaymentStatus,
+                    ProcessingStatus = f.ProcessingStatus,
+                    IsDealClosed = f.IsDealClosed,
+                    OperationClosed = f.OperationClosed
+                });
+            }
+        }
+
+        // 2. Hotels
+        if (queryAll || st == "hotel" || st == "hotels")
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+            var q = db.HotelBookings.AsNoTracking()
+                .Include(x => x.Head)
+                .Include(x => x.Guests)
+                .Where(x => !x.IsDealClosed &&
+                            (x.PaymentStatus == null || x.PaymentStatus.ToLower() != "cancelled") &&
+                            (x.ProcessingStatus == null || (x.ProcessingStatus.ToLower() != "cancelled" && x.ProcessingStatus.ToLower() != "voided")));
+
+            if (salesmanId.HasValue) q = q.Where(x => x.UserId == salesmanId.Value);
+            if (pStatus != null) q = q.Where(x => x.PaymentStatus != null && x.PaymentStatus.ToLower() == pStatus);
+            if (startDate.HasValue) q = q.Where(x => x.CreatedAt >= startDate.Value);
+            if (endOfDay.HasValue) q = q.Where(x => x.CreatedAt <= endOfDay.Value);
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
+                    (x.GuestName != null && x.GuestName.ToLower().Contains(term)) ||
+                    (x.HotelName != null && x.HotelName.ToLower().Contains(term)) ||
+                    (x.Country != null && x.Country.ToLower().Contains(term)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
+                    (x.Agent != null && x.Agent.ToLower().Contains(term)) ||
+                    x.Guests.Any(g => g.GuestName.ToLower().Contains(term)));
+            }
+
+            var list = await q.ToListAsync(ct);
+            foreach (var h in list)
+            {
+                var details = $"{(h.HotelName ?? h.Country)} ({h.Days} days)";
+                if (!string.IsNullOrWhiteSpace(h.GuestName)) details = $"{h.GuestName} · " + details;
+
+                var headName = h.Head != null ? (h.Head.FirstName + " " + h.Head.LastName).Trim() : h.Agent;
+                salesmanMap.TryGetValue(h.UserId, out var smName);
+
+                deals.Add(new OpenDealEntryResponse
+                {
+                    Id = h.Id,
+                    ServiceType = "Hotel",
+                    DocumentNumber = h.DocumentNumber,
+                    CreatedAt = h.CreatedAt ?? DateTime.UtcNow,
+                    HeadId = h.HeadId,
+                    HeadName = headName,
+                    ClientType = h.ClientType,
+                    SalesmanId = h.UserId,
+                    SalesmanName = smName ?? "Salesman #" + h.UserId,
+                    MainDetails = details,
+                    PayableAmount = h.PayableAmount,
+                    ExpectedSupplierCost = h.ExpectedSupplierCost,
+                    ExpectedProfit = CalcProfit(h.PayableAmount, h.ExpectedSupplierCost, h.Profit, h.ProcessingStatus, h.PaymentStatus),
+                    PaymentMethod = h.PaymentMethod,
+                    PaymentStatus = h.PaymentStatus,
+                    ProcessingStatus = h.ProcessingStatus,
+                    IsDealClosed = h.IsDealClosed,
+                    OperationClosed = h.OperationClosed
+                });
+            }
+        }
+
+        // 3. Visas
+        if (queryAll || st == "visa" || st == "visas")
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+            var q = db.SalesVisaApplications.AsNoTracking()
+                .Include(x => x.Head)
+                .Include(x => x.Applicants)
+                .Where(x => !x.IsDealClosed &&
+                            (x.PaymentStatus == null || x.PaymentStatus.ToLower() != "cancelled") &&
+                            (x.ProcessingStatus == null || (x.ProcessingStatus.ToLower() != "cancelled" && x.ProcessingStatus.ToLower() != "voided")));
+
+            if (salesmanId.HasValue) q = q.Where(x => x.UserId == salesmanId.Value);
+            if (pStatus != null) q = q.Where(x => x.PaymentStatus != null && x.PaymentStatus.ToLower() == pStatus);
+            if (startDate.HasValue) q = q.Where(x => x.CreatedAt >= startDate.Value);
+            if (endOfDay.HasValue) q = q.Where(x => x.CreatedAt <= endOfDay.Value);
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
+                    (x.VisaPackName != null && x.VisaPackName.ToLower().Contains(term)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
+                    (x.Agent != null && x.Agent.ToLower().Contains(term)) ||
+                    x.Applicants.Any(a => ((a.FName ?? "") + " " + (a.LName ?? "")).ToLower().Contains(term) || (a.PassportNo != null && a.PassportNo.ToLower().Contains(term))));
+            }
+
+            var list = await q.ToListAsync(ct);
+            foreach (var v in list)
+            {
+                var appNames = v.Applicants?.Select(a => (a.FName + " " + a.LName).Trim()).Where(n => !string.IsNullOrWhiteSpace(n)).ToList() ?? new List<string>();
+                var details = v.VisaPackName ?? "Visa Application";
+                if (appNames.Count > 1) details += $" ({appNames.Count} applicants)";
+                else if (appNames.Count == 1) details = $"{appNames[0]} · {details}";
+
+                var headName = v.Head != null ? (v.Head.FirstName + " " + v.Head.LastName).Trim() : v.Agent;
+                salesmanMap.TryGetValue(v.UserId, out var smName);
+
+                deals.Add(new OpenDealEntryResponse
+                {
+                    Id = v.Id,
+                    ServiceType = "Visa",
+                    DocumentNumber = v.DocumentNumber,
+                    CreatedAt = v.CreatedAt ?? DateTime.UtcNow,
+                    HeadId = v.HeadId,
+                    HeadName = headName,
+                    ClientType = v.ClientType,
+                    SalesmanId = v.UserId,
+                    SalesmanName = smName ?? "Salesman #" + v.UserId,
+                    MainDetails = details,
+                    PayableAmount = v.PayableAmount,
+                    ExpectedSupplierCost = v.ExpectedSupplierCost,
+                    ExpectedProfit = CalcProfit(v.PayableAmount, v.ExpectedSupplierCost, v.Profit, v.ProcessingStatus, v.PaymentStatus, v.RejectionFee),
+                    PaymentMethod = v.Applicants?.FirstOrDefault()?.PaymentMethod ?? "-",
+                    PaymentStatus = v.PaymentStatus,
+                    ProcessingStatus = v.ProcessingStatus,
+                    IsDealClosed = v.IsDealClosed,
+                    OperationClosed = v.OperationClosed
+                });
+            }
+        }
+
+        // 4. VFS Appointments
+        if (queryAll || st == "vfs" || st == "vfs-appointments")
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+            var q = db.VfsAppointments.AsNoTracking()
+                .Include(x => x.Head)
+                .Include(x => x.Applicants)
+                .Where(x => x.DeletedAt == null &&
+                            !x.IsDealClosed &&
+                            (x.PaymentStatus == null || x.PaymentStatus.ToLower() != "cancelled") &&
+                            (x.ProcessingStatus == null || (x.ProcessingStatus.ToLower() != "cancelled" && x.ProcessingStatus.ToLower() != "voided")));
+
+            if (salesmanId.HasValue) q = q.Where(x => x.CreatedBy == salesmanId.Value);
+            if (pStatus != null) q = q.Where(x => x.PaymentStatus != null && x.PaymentStatus.ToLower() == pStatus);
+            if (startDate.HasValue) q = q.Where(x => x.CreatedAt >= startDate.Value);
+            if (endOfDay.HasValue) q = q.Where(x => x.CreatedAt <= endOfDay.Value);
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
+                    (x.Name != null && x.Name.ToLower().Contains(term)) ||
+                    (x.Country != null && x.Country.ToLower().Contains(term)) ||
+                    (x.VisaType != null && x.VisaType.ToLower().Contains(term)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
+                    (x.Agent != null && x.Agent.ToLower().Contains(term)) ||
+                    x.Applicants.Any(a => a.Name.ToLower().Contains(term)));
+            }
+
+            var list = await q.ToListAsync(ct);
+            foreach (var vfs in list)
+            {
+                var details = $"{vfs.Country} - {vfs.VisaType}";
+                if (!string.IsNullOrWhiteSpace(vfs.Name)) details = $"{vfs.Name} · {details}";
+
+                var headName = vfs.Head != null ? (vfs.Head.FirstName + " " + vfs.Head.LastName).Trim() : vfs.Agent;
+                salesmanMap.TryGetValue(vfs.CreatedBy, out var smName);
+
+                deals.Add(new OpenDealEntryResponse
+                {
+                    Id = vfs.Id,
+                    ServiceType = "VFS",
+                    DocumentNumber = vfs.DocumentNumber,
+                    CreatedAt = vfs.CreatedAt ?? DateTime.UtcNow,
+                    HeadId = vfs.HeadId,
+                    HeadName = headName,
+                    ClientType = vfs.ClientType,
+                    SalesmanId = vfs.CreatedBy,
+                    SalesmanName = smName ?? "Salesman #" + vfs.CreatedBy,
+                    MainDetails = details,
+                    PayableAmount = vfs.PayableAmount,
+                    ExpectedSupplierCost = vfs.ExpectedSupplierCost,
+                    ExpectedProfit = CalcProfit(vfs.PayableAmount, vfs.ExpectedSupplierCost, vfs.Profit, vfs.ProcessingStatus, vfs.PaymentStatus),
+                    PaymentMethod = vfs.PaymentMode,
+                    PaymentStatus = vfs.PaymentStatus,
+                    ProcessingStatus = vfs.ProcessingStatus,
+                    IsDealClosed = vfs.IsDealClosed,
+                    OperationClosed = vfs.OperationClosed
+                });
+            }
+        }
+
+        // 5. Holiday Packages
+        if (queryAll || st == "holiday" || st == "holidays" || st == "holiday-packages")
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+            var q = db.HolidayPackages.AsNoTracking()
+                .Include(x => x.Head)
+                .Include(x => x.Passengers)
+                .Where(x => x.DeletedAt == null &&
+                            !x.IsDealClosed &&
+                            (x.PaymentStatus == null || x.PaymentStatus.ToLower() != "cancelled") &&
+                            (x.ProcessingStatus == null || (x.ProcessingStatus.ToLower() != "cancelled" && x.ProcessingStatus.ToLower() != "voided")));
+
+            if (salesmanId.HasValue) q = q.Where(x => x.CreatedBy == salesmanId.Value);
+            if (pStatus != null) q = q.Where(x => x.PaymentStatus != null && x.PaymentStatus.ToLower() == pStatus);
+            if (startDate.HasValue) q = q.Where(x => x.CreatedAt >= startDate.Value);
+            if (endOfDay.HasValue) q = q.Where(x => x.CreatedAt <= endOfDay.Value);
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
+                    (x.PassengerName != null && x.PassengerName.ToLower().Contains(term)) ||
+                    (x.Country != null && x.Country.ToLower().Contains(term)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
+                    (x.Agent != null && x.Agent.ToLower().Contains(term)) ||
+                    x.Passengers.Any(p => p.PassengerName.ToLower().Contains(term)));
+            }
+
+            var list = await q.ToListAsync(ct);
+            foreach (var hol in list)
+            {
+                var details = $"{hol.Country} ({hol.Days} days)";
+                if (!string.IsNullOrWhiteSpace(hol.PassengerName)) details = $"{hol.PassengerName} · {details}";
+
+                var headName = hol.Head != null ? (hol.Head.FirstName + " " + hol.Head.LastName).Trim() : hol.Agent;
+                salesmanMap.TryGetValue(hol.CreatedBy, out var smName);
+
+                deals.Add(new OpenDealEntryResponse
+                {
+                    Id = hol.Id,
+                    ServiceType = "Holiday",
+                    DocumentNumber = hol.DocumentNumber,
+                    CreatedAt = hol.CreatedAt ?? DateTime.UtcNow,
+                    HeadId = hol.HeadId,
+                    HeadName = headName,
+                    ClientType = hol.ClientType,
+                    SalesmanId = hol.CreatedBy,
+                    SalesmanName = smName ?? "Salesman #" + hol.CreatedBy,
+                    MainDetails = details,
+                    PayableAmount = hol.PayableAmount,
+                    ExpectedSupplierCost = hol.ExpectedSupplierCost,
+                    ExpectedProfit = CalcProfit(hol.PayableAmount, hol.ExpectedSupplierCost, hol.Profit, hol.ProcessingStatus, hol.PaymentStatus),
+                    PaymentMethod = hol.PaymentMode,
+                    PaymentStatus = hol.PaymentStatus,
+                    ProcessingStatus = hol.ProcessingStatus,
+                    IsDealClosed = hol.IsDealClosed,
+                    OperationClosed = hol.OperationClosed
+                });
+            }
+        }
+
+        // 6. Transportation
+        if (queryAll || st == "transport" || st == "transportation")
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+            var q = db.Transportations.AsNoTracking()
+                .Include(x => x.Head)
+                .Include(x => x.Passengers)
+                .Where(x => x.DeletedAt == null &&
+                            !x.IsDealClosed &&
+                            (x.PaymentStatus == null || x.PaymentStatus.ToLower() != "cancelled") &&
+                            (x.ProcessingStatus == null || (x.ProcessingStatus.ToLower() != "cancelled" && x.ProcessingStatus.ToLower() != "voided")));
+
+            if (salesmanId.HasValue) q = q.Where(x => x.CreatedBy == salesmanId.Value);
+            if (pStatus != null) q = q.Where(x => x.PaymentStatus != null && x.PaymentStatus.ToLower() == pStatus);
+            if (startDate.HasValue) q = q.Where(x => x.CreatedAt >= startDate.Value);
+            if (endOfDay.HasValue) q = q.Where(x => x.CreatedAt <= endOfDay.Value);
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
+                    (x.Name != null && x.Name.ToLower().Contains(term)) ||
+                    (x.Pickup != null && x.Pickup.ToLower().Contains(term)) ||
+                    (x.Drop != null && x.Drop.ToLower().Contains(term)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
+                    (x.Agent != null && x.Agent.ToLower().Contains(term)));
+            }
+
+            var list = await q.ToListAsync(ct);
+            foreach (var tr in list)
+            {
+                var details = $"{tr.Pickup} -> {tr.Drop}";
+                if (!string.IsNullOrWhiteSpace(tr.Name)) details = $"{tr.Name} · {details}";
+
+                var headName = tr.Head != null ? (tr.Head.FirstName + " " + tr.Head.LastName).Trim() : tr.Agent;
+                salesmanMap.TryGetValue(tr.CreatedBy, out var smName);
+
+                deals.Add(new OpenDealEntryResponse
+                {
+                    Id = tr.Id,
+                    ServiceType = "Transport",
+                    DocumentNumber = tr.DocumentNumber,
+                    CreatedAt = tr.CreatedAt ?? DateTime.UtcNow,
+                    HeadId = tr.HeadId,
+                    HeadName = headName,
+                    ClientType = tr.ClientType,
+                    SalesmanId = tr.CreatedBy,
+                    SalesmanName = smName ?? "Salesman #" + tr.CreatedBy,
+                    MainDetails = details,
+                    PayableAmount = tr.PayableAmount,
+                    ExpectedSupplierCost = tr.ExpectedSupplierCost,
+                    ExpectedProfit = CalcProfit(tr.PayableAmount, tr.ExpectedSupplierCost, tr.Profit, tr.ProcessingStatus, tr.PaymentStatus),
+                    PaymentMethod = tr.PaymentMethod,
+                    PaymentStatus = tr.PaymentStatus,
+                    ProcessingStatus = tr.ProcessingStatus,
+                    IsDealClosed = tr.IsDealClosed,
+                    OperationClosed = tr.OperationClosed
+                });
+            }
+        }
+
+        // 7. Other Services
+        if (queryAll || st == "other" || st == "other-services")
+        {
+            using var db = _dbContextFactory.CreateDbContext();
+            var q = db.OtherServices.AsNoTracking()
+                .Include(x => x.Head)
+                .Include(x => x.Applicants)
+                .Where(x => x.DeletedAt == null &&
+                            !x.IsDealClosed &&
+                            (x.PaymentStatus == null || x.PaymentStatus.ToLower() != "cancelled") &&
+                            (x.ProcessingStatus == null || (x.ProcessingStatus.ToLower() != "cancelled" && x.ProcessingStatus.ToLower() != "voided")));
+
+            if (salesmanId.HasValue) q = q.Where(x => x.CreatedBy == salesmanId.Value);
+            if (pStatus != null) q = q.Where(x => x.PaymentStatus != null && x.PaymentStatus.ToLower() == pStatus);
+            if (startDate.HasValue) q = q.Where(x => x.CreatedAt >= startDate.Value);
+            if (endOfDay.HasValue) q = q.Where(x => x.CreatedAt <= endOfDay.Value);
+            if (!string.IsNullOrWhiteSpace(term))
+            {
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
+                    (x.Name != null && x.Name.ToLower().Contains(term)) ||
+                    (x.ServiceName != null && x.ServiceName.ToLower().Contains(term)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
+                    (x.Agent != null && x.Agent.ToLower().Contains(term)));
+            }
+
+            var list = await q.ToListAsync(ct);
+            foreach (var oth in list)
+            {
+                var details = oth.ServiceName ?? "Other Service";
+                if (!string.IsNullOrWhiteSpace(oth.Name)) details = $"{oth.Name} · {details}";
+
+                var headName = oth.Head != null ? (oth.Head.FirstName + " " + oth.Head.LastName).Trim() : oth.Agent;
+                salesmanMap.TryGetValue(oth.CreatedBy, out var smName);
+
+                deals.Add(new OpenDealEntryResponse
+                {
+                    Id = oth.Id,
+                    ServiceType = "Other",
+                    DocumentNumber = oth.DocumentNumber,
+                    CreatedAt = oth.CreatedAt ?? DateTime.UtcNow,
+                    HeadId = oth.HeadId,
+                    HeadName = headName,
+                    ClientType = oth.ClientType,
+                    SalesmanId = oth.CreatedBy,
+                    SalesmanName = smName ?? "Salesman #" + oth.CreatedBy,
+                    MainDetails = details,
+                    PayableAmount = oth.PayableAmount,
+                    ExpectedSupplierCost = oth.ExpectedSupplierCost,
+                    ExpectedProfit = CalcProfit(oth.PayableAmount, oth.ExpectedSupplierCost, oth.Profit, oth.ProcessingStatus, oth.PaymentStatus),
+                    PaymentMethod = oth.PaymentMethod,
+                    PaymentStatus = oth.PaymentStatus,
+                    ProcessingStatus = oth.ProcessingStatus,
+                    IsDealClosed = oth.IsDealClosed,
+                    OperationClosed = oth.OperationClosed
+                });
+            }
+        }
+
+        return deals.OrderByDescending(x => x.CreatedAt).ToList();
     }
 
     private static string NormalizeStatus(string status)
@@ -526,21 +1382,59 @@ public sealed class OperationsReadService : IOperationsReadService
             }
         }
 
+        List<TexasPortal.Contracts.Sales.Bookings.VisaCountryMasterResponse>? visaCountries = null;
+        var countryMap = new Dictionary<long, string>();
+        try
+        {
+            visaCountries = await _agentsApiClient.GetVisaCountriesAsync(ct);
+            if (visaCountries != null)
+            {
+                foreach (var c in visaCountries) countryMap[c.Id] = c.Name;
+            }
+        }
+        catch { }
+
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var term = search.Trim().ToLower();
-            qCount = qCount.Where(x =>
-                (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
-                (x.VisaPackName != null && x.VisaPackName.ToLower().Contains(term)) ||
-                (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
-                x.Applicants.Any(a => (a.FName != null && a.FName.ToLower().Contains(term)) || (a.LName != null && a.LName.ToLower().Contains(term)) || (a.PassportNo != null && a.PassportNo.ToLower().Contains(term)))
-            );
-            qList = qList.Where(x =>
-                (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
-                (x.VisaPackName != null && x.VisaPackName.ToLower().Contains(term)) ||
-                (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
-                x.Applicants.Any(a => (a.FName != null && a.FName.ToLower().Contains(term)) || (a.LName != null && a.LName.ToLower().Contains(term)) || (a.PassportNo != null && a.PassportNo.ToLower().Contains(term)))
-            );
+            var term = search.Trim();
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token.ToLower();
+                var matchingCountryIds = visaCountries?
+                    .Where(c => c.Name.Contains(tok, StringComparison.OrdinalIgnoreCase))
+                    .Select(c => (int)c.Id)
+                    .ToList() ?? new List<int>();
+
+                qCount = qCount.Where(x =>
+                    (matchingCountryIds.Count > 0 && matchingCountryIds.Contains(x.CountryId)) ||
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(tok)) ||
+                    (x.VisaPackName != null && x.VisaPackName.ToLower().Contains(tok)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(tok)) ||
+                    x.Applicants.Any(a => 
+                        (a.Nationality != null && a.Nationality.ToLower().Contains(tok)) ||
+                        (a.FName != null && a.FName.ToLower().Contains(tok)) || 
+                        (a.LName != null && a.LName.ToLower().Contains(tok)) || 
+                        (((a.FName ?? "") + " " + (a.LName ?? "")).ToLower().Contains(tok)) ||
+                        (a.PassportNo != null && a.PassportNo.ToLower().Contains(tok)) || 
+                        (a.VisaAppId != null && a.VisaAppId.ToLower().Contains(tok)) || 
+                        (a.GovtFeeReference != null && a.GovtFeeReference.ToLower().Contains(tok)))
+                );
+                qList = qList.Where(x =>
+                    (matchingCountryIds.Count > 0 && matchingCountryIds.Contains(x.CountryId)) ||
+                    (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(tok)) ||
+                    (x.VisaPackName != null && x.VisaPackName.ToLower().Contains(tok)) ||
+                    (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(tok)) ||
+                    x.Applicants.Any(a => 
+                        (a.Nationality != null && a.Nationality.ToLower().Contains(tok)) ||
+                        (a.FName != null && a.FName.ToLower().Contains(tok)) || 
+                        (a.LName != null && a.LName.ToLower().Contains(tok)) || 
+                        (((a.FName ?? "") + " " + (a.LName ?? "")).ToLower().Contains(tok)) ||
+                        (a.PassportNo != null && a.PassportNo.ToLower().Contains(tok)) || 
+                        (a.VisaAppId != null && a.VisaAppId.ToLower().Contains(tok)) || 
+                        (a.GovtFeeReference != null && a.GovtFeeReference.ToLower().Contains(tok)))
+                );
+            }
         }
 
         qList = qList.OrderByDescending(x => x.CreatedAt);
@@ -561,6 +1455,11 @@ public sealed class OperationsReadService : IOperationsReadService
                 x.DocumentNumber,
                 HeadName = x.Head != null ? (x.Head.FirstName + " " + x.Head.LastName).Trim() : x.Agent,
                 SalesmanName = x.User.Name,
+                x.CountryId,
+                PassportNo = x.Applicants.OrderBy(a => a.Id).Select(a => a.PassportNo).FirstOrDefault(),
+                GovtTrackingId = x.Applicants.Where(a => a.VisaAppId != null || a.GovtFeeReference != null).OrderBy(a => a.Id).Select(a => a.VisaAppId ?? a.GovtFeeReference).FirstOrDefault(),
+                ApplicantFirstName = x.Applicants.OrderBy(a => a.Id).Select(a => a.FName).FirstOrDefault(),
+                ApplicantFirstNames = x.Applicants.Select(a => a.FName).ToList(),
                 x.VisaPackName,
                 x.ClientType,
                 x.ProcessingStatus,
@@ -580,13 +1479,30 @@ public sealed class OperationsReadService : IOperationsReadService
             .ToListAsync(ct);
 
         await Task.WhenAll(totalTask, rawItemsTask);
-        var items = rawItemsTask.Result.Select(x => new VisaApplicationSummaryResponse
+
+
+
+        var items = rawItemsTask.Result.Select(x =>
         {
-            Id = x.Id,
-            DocumentNumber = x.DocumentNumber,
-            HeadName = x.HeadName,
-            SalesmanName = x.SalesmanName,
-            VisaPackName = x.VisaPackName,
+            var countryName = countryMap.TryGetValue(x.CountryId, out var cName) ? cName : x.VisaPackName;
+            var firstNames = x.ApplicantFirstNames?.Where(f => !string.IsNullOrWhiteSpace(f)).ToList() ?? new List<string>();
+            var applicantFirstNamesStr = string.Join(", ", firstNames);
+            var applicantFirstName = firstNames.FirstOrDefault() ?? x.ApplicantFirstName;
+            return new VisaApplicationSummaryResponse
+            {
+                Id = x.Id,
+                DocumentNumber = x.DocumentNumber,
+                HeadName = x.HeadName,
+                SalesmanName = x.SalesmanName,
+                VisaPackName = x.VisaPackName,
+                CountryName = countryName,
+                Country = countryName,
+                PassportNumber = x.PassportNo,
+                PassportNo = x.PassportNo,
+                GovtId = x.GovtTrackingId,
+                GovtTrackingId = x.GovtTrackingId,
+                ApplicantFirstName = applicantFirstName,
+                ApplicantFirstNames = applicantFirstNamesStr,
             ClientType = x.ClientType,
             ProcessingStatus = x.ProcessingStatus,
             IsDealClosed = x.IsDealClosed,
@@ -602,6 +1518,7 @@ public sealed class OperationsReadService : IOperationsReadService
             SupplierId = x.SupplierId,
             SupplierName = x.SupplierName,
             Supplier = x.SupplierName
+        };
         }).ToList();
 
         if (items.Count > 0)
@@ -1686,9 +2603,14 @@ public sealed class OperationsReadService : IOperationsReadService
     // Global queries for Customer Heads
     // Global queries for Customer Heads & Agents
     public async Task<PagedResponse<HeadSummaryResponse>> GetHeadsAsync(
-        int page, int pageSize, string? search, string? type = null, CancellationToken ct = default)
+        int page, int pageSize, string? search, string? type = null, long? salesmanId = null, CancellationToken ct = default)
     {
         var q = _db.Heads.AsNoTracking().Where(h => h.DeletedAt == null);
+        if (salesmanId.HasValue && salesmanId.Value > 0)
+        {
+            q = q.Where(h => h.CreatedBy == salesmanId.Value);
+        }
+
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
@@ -1721,12 +2643,36 @@ public sealed class OperationsReadService : IOperationsReadService
                 Type = string.IsNullOrWhiteSpace(h.Type) ? "customer" : h.Type,
                 Status = h.Status,
                 Wallet = h.Wallet,
+                Address = h.Address,
+                SalesmanId = h.CreatedBy,
                 SalesmanName = h.Creator != null ? h.Creator.Name : null,
                 CreatedAt = h.CreatedAt
             })
             .ToListAsync(ct);
 
         return PagedResponse<HeadSummaryResponse>.Create(items, total, page, pageSize);
+    }
+
+    public async Task<HeadSummaryStatsResponse> GetHeadsSummaryAsync(long? salesmanId = null, CancellationToken ct = default)
+    {
+        var q = _db.Heads.AsNoTracking().Where(h => h.DeletedAt == null);
+        if (salesmanId.HasValue && salesmanId.Value > 0)
+        {
+            q = q.Where(h => h.CreatedBy == salesmanId.Value);
+        }
+
+        var totalCount = await q.CountAsync(ct);
+        var customerCount = await q.CountAsync(h => string.IsNullOrWhiteSpace(h.Type) || h.Type.ToLower() == "customer" || h.Type.ToLower() == "head", ct);
+        var agentCount = await q.CountAsync(h => h.Type.ToLower() == "agent", ct);
+        var totalWallet = await q.SumAsync(h => (decimal?)h.Wallet, ct) ?? 0m;
+
+        return new HeadSummaryStatsResponse
+        {
+            TotalCount = totalCount,
+            CustomerCount = customerCount,
+            AgentCount = agentCount,
+            TotalWallet = totalWallet
+        };
     }
 
     public async Task<HeadDetailResponse?> GetHeadByIdAsync(
@@ -1796,6 +2742,18 @@ public sealed class OperationsReadService : IOperationsReadService
         DateTime? effectiveStart = startDate.HasValue ? startDate.Value.Date : null;
         DateTime? effectiveEnd = endDate.HasValue ? endDate.Value.Date.AddDays(1).AddTicks(-1) : null;
 
+        List<TexasPortal.Contracts.Sales.Bookings.VisaCountryMasterResponse>? visaCountries = null;
+        var countryMap = new Dictionary<long, string>();
+        try
+        {
+            visaCountries = await _agentsApiClient.GetVisaCountriesAsync(ct);
+            if (visaCountries != null)
+            {
+                foreach (var c in visaCountries) countryMap[c.Id] = c.Name;
+            }
+        }
+        catch { }
+
         // 2. Flight Bookings
         var flightsQuery = _db.FlightBookings.AsNoTracking()
             .Where(b => isAgent ? b.AgentId == headId : b.HeadId == headId);
@@ -1844,20 +2802,48 @@ public sealed class OperationsReadService : IOperationsReadService
         if (effectiveStart.HasValue) visasQuery = visasQuery.Where(b => b.CreatedAt >= effectiveStart.Value);
         if (effectiveEnd.HasValue) visasQuery = visasQuery.Where(b => b.CreatedAt <= effectiveEnd.Value);
 
-        var visas = await visasQuery
-            .Select(b => new HeadLedgerEntryResponse
+        var visasRaw = await visasQuery
+            .Select(b => new
+            {
+                b.Id,
+                b.CountryId,
+                b.VisaPackName,
+                b.PayableAmount,
+                PaymentMethod = b.Applicants.Select(a => a.PaymentMethod).FirstOrDefault(),
+                Applicants = b.Applicants.Select(a => new { a.FName, a.LName }).ToList(),
+                b.CreatedAt
+            })
+            .ToListAsync(ct);
+
+        var visas = visasRaw.Select(b =>
+        {
+            var appNames = b.Applicants.Select(a => ((a.FName ?? "") + " " + (a.LName ?? "")).Trim()).Where(n => !string.IsNullOrEmpty(n)).ToList();
+            var applicantDisplay = appNames.Count switch
+            {
+                0 => "Applicant",
+                1 => appNames[0],
+                2 => $"{appNames[0]}, {appNames[1]}",
+                _ => $"{appNames[0]} (+{appNames.Count - 1} more)"
+            };
+
+            var countryName = countryMap.TryGetValue(b.CountryId, out var cName) ? cName : null;
+            var description = !string.IsNullOrWhiteSpace(countryName)
+                ? $"Visa Application #{b.Id}: {applicantDisplay} - {countryName} ({b.VisaPackName})"
+                : $"Visa Application #{b.Id}: {applicantDisplay} ({b.VisaPackName})";
+
+            return new HeadLedgerEntryResponse
             {
                 Id = b.Id,
                 ServiceId = b.Id,
                 Type = "visa_application",
-                Description = $"Visa Application #{b.Id}: {b.VisaPackName}",
+                Description = description,
                 Debit = b.PayableAmount,
                 Credit = 0,
                 Balance = -b.PayableAmount,
-                PaymentMethod = b.Applicants.Select(a => a.PaymentMethod).FirstOrDefault(),
+                PaymentMethod = b.PaymentMethod,
                 CreatedAt = b.CreatedAt
-            })
-            .ToListAsync(ct);
+            };
+        }).ToList();
 
         // 5. Holiday Packages
         var holidaysQuery = _db.HolidayPackages.AsNoTracking()
@@ -1934,7 +2920,7 @@ public sealed class OperationsReadService : IOperationsReadService
                 Id = b.Id,
                 ServiceId = b.Id,
                 Type = "vfs_appointment",
-                Description = $"VFS Appointment #{b.Id}: {b.Name} ({b.Country})",
+                Description = $"VFS Service #{b.Id}: {b.Name} ({b.Country})",
                 Debit = b.PayableAmount,
                 Credit = 0,
                 Balance = -b.PayableAmount,
@@ -1949,20 +2935,61 @@ public sealed class OperationsReadService : IOperationsReadService
         if (effectiveStart.HasValue) receiptsQuery = receiptsQuery.Where(r => r.CreatedAt >= effectiveStart.Value);
         if (effectiveEnd.HasValue) receiptsQuery = receiptsQuery.Where(r => r.CreatedAt <= effectiveEnd.Value);
 
-        var receipts = await receiptsQuery
-            .Select(r => new HeadLedgerEntryResponse
+        var receiptsRaw = await receiptsQuery
+            .Select(r => new
+            {
+                r.Id,
+                r.DocumentNumber,
+                r.ReceiptId,
+                r.Service,
+                r.Amount,
+                r.PaymentMode,
+                r.BankName,
+                r.CreatedAt
+            })
+            .ToListAsync(ct);
+
+        var receipts = receiptsRaw.Select(r =>
+        {
+            string accountName;
+            var modeLower = (r.PaymentMode ?? "").ToLowerInvariant();
+            if (modeLower == "cash")
+            {
+                accountName = !string.IsNullOrWhiteSpace(r.BankName) ? r.BankName : "Cash Account";
+            }
+            else if (modeLower == "wallet")
+            {
+                accountName = "Customer Wallet";
+            }
+            else
+            {
+                accountName = !string.IsNullOrWhiteSpace(r.BankName) ? r.BankName : "Bank Account";
+            }
+
+            var serviceLower = (r.Service ?? "").ToLowerInvariant();
+            string description;
+            if (serviceLower is "deposit" or "wallet_deposit")
+            {
+                description = $"Deposit #{r.DocumentNumber ?? r.ReceiptId}: via {accountName} ({r.PaymentMode})";
+            }
+            else
+            {
+                description = $"Receipt #{r.DocumentNumber ?? r.ReceiptId}: {r.Service} via {accountName} ({r.PaymentMode})";
+            }
+
+            return new HeadLedgerEntryResponse
             {
                 Id = r.Id,
                 ServiceId = r.Id,
                 Type = "receipt",
-                Description = $"Receipt #{r.DocumentNumber ?? r.ReceiptId}: {r.Service} ({r.PaymentMode})",
+                Description = description,
                 Debit = 0,
                 Credit = r.Amount,
                 Balance = r.Amount,
                 PaymentMethod = r.PaymentMode,
                 CreatedAt = r.CreatedAt
-            })
-            .ToListAsync(ct);
+            };
+        }).ToList();
 
         // 1. Explicit HeadLedgers (Only for Customers, Agents are handled via Accounts Portal)
         var hlQuery = _db.HeadLedgers.AsNoTracking()
@@ -1991,6 +3018,10 @@ public sealed class OperationsReadService : IOperationsReadService
         var otherPayMap = others.ToDictionary(o => o.Id, o => o.PaymentMethod);
         var vfsPayMap = vfsList.ToDictionary(v => v.Id, v => v.PaymentMethod);
         var receiptPayMap = receipts.ToDictionary(r => r.Id, r => r.PaymentMethod);
+
+        var visaDescMap = visas.ToDictionary(v => v.Id, v => v.Description);
+        var receiptDescMap = receipts.ToDictionary(r => r.Id, r => r.Description);
+        var vfsDescMap = vfsList.ToDictionary(v => v.Id, v => v.Description);
 
         foreach (var l in hlRaw)
         {
@@ -2022,12 +3053,35 @@ public sealed class OperationsReadService : IOperationsReadService
                 _ => null
             };
 
+            var desc = l.Description;
+            if (typeLower is "visa" or "visas" or "visa_application")
+            {
+                if (visaDescMap.TryGetValue(l.ServiceId, out var richVisaDesc))
+                {
+                    desc = richVisaDesc;
+                }
+            }
+            else if (typeLower is "receipt" or "receipts" or "deposit" or "credit_settlement")
+            {
+                if (receiptDescMap.TryGetValue(l.ServiceId, out var richReceiptDesc))
+                {
+                    desc = richReceiptDesc;
+                }
+            }
+            else if (typeLower is "vfs" or "vfs_appointment")
+            {
+                if (vfsDescMap.TryGetValue(l.ServiceId, out var richVfsDesc))
+                {
+                    desc = richVfsDesc;
+                }
+            }
+
             entries.Add(new HeadLedgerEntryResponse
             {
                 Id = l.Id,
                 ServiceId = l.ServiceId,
                 Type = sType,
-                Description = l.Description,
+                Description = desc,
                 Debit = debit,
                 Credit = credit,
                 Balance = credit - debit,
@@ -2086,12 +3140,15 @@ public sealed class OperationsReadService : IOperationsReadService
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim();
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
             entries = entries.Where(e =>
-                (e.Description != null && e.Description.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
-                (e.Type != null && e.Type.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
-                (e.PaymentMethod != null && e.PaymentMethod.Contains(term, StringComparison.OrdinalIgnoreCase)) ||
-                (e.ServiceId.HasValue && e.ServiceId.Value.ToString().Contains(term)) ||
-                e.Id.ToString().Contains(term)
+                tokens.All(tok =>
+                    (e.Description != null && e.Description.Contains(tok, StringComparison.OrdinalIgnoreCase)) ||
+                    (e.Type != null && e.Type.Contains(tok, StringComparison.OrdinalIgnoreCase)) ||
+                    (e.PaymentMethod != null && e.PaymentMethod.Contains(tok, StringComparison.OrdinalIgnoreCase)) ||
+                    (e.ServiceId.HasValue && e.ServiceId.Value.ToString().Contains(tok)) ||
+                    e.Id.ToString().Contains(tok)
+                )
             ).ToList();
         }
 
@@ -2179,9 +3236,16 @@ public sealed class OperationsReadService : IOperationsReadService
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
-            q = q.Where(x => x.ReceiptId.ToLower().Contains(term) ||
+            q = q.Where(x => (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
+                             (x.ReceiptId != null && x.ReceiptId.ToLower().Contains(term)) ||
+                             x.Id.ToString().Contains(term) ||
                              (x.AgentId != null && x.AgentId.ToString().Contains(term)) ||
-                             (x.Head != null && ((x.Head.FirstName + " " + x.Head.LastName).ToLower().Contains(term))));
+                             (x.Head != null && ((x.Head.FirstName + " " + x.Head.LastName).ToLower().Contains(term))) ||
+                             (_db.Heads.Where(h => h.Id == x.AgentId && ((h.FirstName + " " + h.LastName).ToLower().Contains(term))).Any()) ||
+                             (x.Creator != null && x.Creator.Name.ToLower().Contains(term)) ||
+                             (x.Narration != null && x.Narration.ToLower().Contains(term)) ||
+                             (x.Service != null && x.Service.ToLower().Contains(term)) ||
+                             (x.PaymentMode != null && x.PaymentMode.ToLower().Contains(term)));
         }
         q = q.OrderByDescending(x => x.CreatedAt);
 
@@ -2209,7 +3273,9 @@ public sealed class OperationsReadService : IOperationsReadService
                 Status = x.Status,
                 CreatedAt = x.CreatedAt ?? DateTime.UtcNow,
                 AgentId = x.AgentId,
-                SalesmanName = x.Creator != null ? x.Creator.Name : null
+                SalesmanName = x.Creator != null ? x.Creator.Name : null,
+                BankName = x.BankName,
+                PaymentSource = x.BankName ?? x.PaymentMode
             })
             .ToListAsync(ct);
 
@@ -2271,7 +3337,8 @@ public sealed class OperationsReadService : IOperationsReadService
             .GroupBy(x => 1)
             .Select(g => new {
                 Count = g.Count(),
-                Payable = g.Sum(x => (decimal?)x.PayableAmount) ?? 0m
+                Payable = g.Sum(x => (decimal?)x.PayableAmount) ?? 0m,
+                Profit = g.Sum(x => (decimal?)x.Profit) ?? 0m
             })
             .FirstOrDefaultAsync(ct);
 
@@ -2388,7 +3455,7 @@ public sealed class OperationsReadService : IOperationsReadService
             TotalTransportations = tr?.Count ?? 0,
             TotalOtherServices = ot?.Count ?? 0,
             TotalPayableAmount = (fl?.Payable ?? 0m) + (ht?.Payable ?? 0m) + (vs?.Payable ?? 0m) + (vf?.Payable ?? 0m) + (hl?.Payable ?? 0m) + (tr?.Payable ?? 0m) + (ot?.Payable ?? 0m),
-            TotalProfit = (ht?.Profit ?? 0m) + (vs?.Profit ?? 0m) + (vf?.Profit ?? 0m) + (hl?.Profit ?? 0m) + (tr?.Profit ?? 0m) + (ot?.Profit ?? 0m),
+            TotalProfit = (fl?.Profit ?? 0m) + (ht?.Profit ?? 0m) + (vs?.Profit ?? 0m) + (vf?.Profit ?? 0m) + (hl?.Profit ?? 0m) + (tr?.Profit ?? 0m) + (ot?.Profit ?? 0m),
             CashInHand = cash,
             ActiveLeads = leads,
             TotalHeads = hd?.Count ?? 0,

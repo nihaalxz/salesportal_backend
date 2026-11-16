@@ -21,7 +21,13 @@ public class VfsAppointment : ICreatorOwned
     public bool IsDealClosed { get; set; } = false;
     public bool OperationClosed { get; set; } = false;
     public long? SupplierId { get; set; }
-    public string? SupplierName { get; set; }
+    [System.ComponentModel.DataAnnotations.Schema.NotMapped]
+    public string? SupplierName
+    {
+        get => !string.IsNullOrWhiteSpace(_supplierName) ? _supplierName : Supplier;
+        set => _supplierName = value;
+    }
+    private string? _supplierName;
     public string Country { get; set; } = null!;
     public string VisaType { get; set; } = null!;
     public decimal PayableAmount { get; set; }

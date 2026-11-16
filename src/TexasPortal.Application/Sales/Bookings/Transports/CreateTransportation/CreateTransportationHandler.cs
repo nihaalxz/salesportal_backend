@@ -294,7 +294,7 @@ public sealed class CreateTransportationHandler
                     BankName = request.PaymentMethod == "online" ? request.BankName : null,
                     Vehicle = request.Vehicle,
                     PaymentProof = request.PaymentProof,
-                    PaymentStatus = "pending",
+                    PaymentStatus = "success",
                     ProcessingStatus = "pending",
                     CreatedAt = DateTime.UtcNow
                 };

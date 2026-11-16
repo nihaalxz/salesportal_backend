@@ -104,19 +104,27 @@ public class ListReportDocumentBuilder : IDocumentBuilder
             model.Table.Columns = new List<DocumentColumn>
             {
                 new() { Header = "ID", RelativeWidth = 0.8f, IsMonoFont = true },
-                new() { Header = "HEAD / APPLICANT", RelativeWidth = 2.2f, IsBold = true },
-                new() { Header = "PACKAGE", RelativeWidth = 1.5f },
+                new() { Header = "COUNTRY", RelativeWidth = 1.2f },
+                new() { Header = "HEAD", RelativeWidth = 1.7f, IsBold = true },
+                new() { Header = "APPLICANT NAME", RelativeWidth = 1.9f },
+                new() { Header = "PACKAGE", RelativeWidth = 1.3f },
                 new() { Header = "PAYMENT", RelativeWidth = 1.0f, Alignment = ColumnAlignment.Center },
-                new() { Header = "PROCESSING", RelativeWidth = 1.2f, Alignment = ColumnAlignment.Center },
+                new() { Header = "PROCESSING", RelativeWidth = 1.1f, Alignment = ColumnAlignment.Center },
                 new() { Header = "PRICE (BHD)", RelativeWidth = 1.2f, Alignment = ColumnAlignment.Right, IsBold = true }
             };
 
             foreach (var x in items)
             {
+                var country = !string.IsNullOrWhiteSpace(x.CountryName) ? x.CountryName : (!string.IsNullOrWhiteSpace(x.Country) ? x.Country : "—");
+                var head = !string.IsNullOrWhiteSpace(x.HeadName) ? x.HeadName : "—";
+                var applicant = !string.IsNullOrWhiteSpace(x.ApplicantNames) ? x.ApplicantNames : (!string.IsNullOrWhiteSpace(x.ApplicantFirstName) ? x.ApplicantFirstName : "—");
+
                 model.Table.Rows.Add(new List<string>
                 {
                     x.DocumentNumber ?? $"#{x.Id}",
-                    x.HeadName ?? "Applicant",
+                    country,
+                    head,
+                    applicant,
                     x.VisaPackName ?? "Standard",
                     x.PaymentStatus?.ToUpper() ?? "PENDING",
                     x.ProcessingStatus?.ToUpper() ?? "NEW",
@@ -124,7 +132,7 @@ public class ListReportDocumentBuilder : IDocumentBuilder
                 });
             }
 
-            model.Table.TotalRow = new List<string> { "TOTAL", $"{items.Count} Record(s)", "", "", "", $"{totalSales:0.000} BHD" };
+            model.Table.TotalRow = new List<string> { "TOTAL", "", $"{items.Count} Record(s)", "", "", "", "", $"{totalSales:0.000} BHD" };
         }
         else if (type == "flight")
         {
@@ -150,8 +158,9 @@ public class ListReportDocumentBuilder : IDocumentBuilder
             model.Table.Columns = new List<DocumentColumn>
             {
                 new() { Header = "ID", RelativeWidth = 0.8f, IsMonoFont = true },
-                new() { Header = "HEAD NAME", RelativeWidth = 2.0f, IsBold = true },
-                new() { Header = "ROUTE", RelativeWidth = 2.0f },
+                new() { Header = "HEAD NAME", RelativeWidth = 1.7f, IsBold = true },
+                new() { Header = "PASSENGER NAME", RelativeWidth = 1.9f },
+                new() { Header = "ROUTE", RelativeWidth = 1.7f },
                 new() { Header = "PAX", RelativeWidth = 0.5f, Alignment = ColumnAlignment.Center },
                 new() { Header = "PAYMENT", RelativeWidth = 1.0f, Alignment = ColumnAlignment.Center },
                 new() { Header = "PRICE (BHD)", RelativeWidth = 1.2f, Alignment = ColumnAlignment.Right, IsBold = true }
@@ -159,10 +168,13 @@ public class ListReportDocumentBuilder : IDocumentBuilder
 
             foreach (var x in items)
             {
+                var passenger = !string.IsNullOrWhiteSpace(x.PassengerNames) ? x.PassengerNames : "—";
+
                 model.Table.Rows.Add(new List<string>
                 {
                     x.DocumentNumber ?? $"#{x.Id}",
                     x.HeadName ?? "Passenger",
+                    passenger,
                     $"{x.FromLocation} -> {x.ToLocation}",
                     x.PassengerCount.ToString(),
                     x.PaymentStatus?.ToUpper() ?? "PENDING",
@@ -170,7 +182,7 @@ public class ListReportDocumentBuilder : IDocumentBuilder
                 });
             }
 
-            model.Table.TotalRow = new List<string> { "TOTAL", $"{items.Count} Record(s)", "", "", "", $"{totalSales:0.000} BHD" };
+            model.Table.TotalRow = new List<string> { "TOTAL", $"{items.Count} Record(s)", "", "", "", "", $"{totalSales:0.000} BHD" };
         }
         else if (type == "hotel")
         {
@@ -403,6 +415,11 @@ public class ListReportDocumentBuilder : IDocumentBuilder
             model.Title = "PAYMENT RECEIPTS EXPORT REPORT";
             var items = new List<TexasPortal.Contracts.Sales.Receipts.ReceiptSummaryResponse>();
 
+            DateTime? startDate = null;
+            DateTime? endDate = null;
+            if (q.TryGetValue("startDate", out var sDate) && DateTime.TryParse(sDate, out var sParsed)) startDate = sParsed;
+            if (q.TryGetValue("endDate", out var eDate) && DateTime.TryParse(eDate, out var eParsed)) endDate = eParsed;
+
             if (userId > 0)
             {
                 var res = await _salesReadService.GetReceiptsAsync(userId, new ReceiptsListQuery(1, 1000, search), ct);
@@ -410,7 +427,7 @@ public class ListReportDocumentBuilder : IDocumentBuilder
             }
             if (items.Count == 0)
             {
-                var resOps = await _operationsReadService.GetReceiptsAsync(1, 1000, search, ct: ct);
+                var resOps = await _operationsReadService.GetReceiptsAsync(1, 1000, search, startDate, endDate, ct: ct);
                 items = resOps.Items?.ToList() ?? new List<TexasPortal.Contracts.Sales.Receipts.ReceiptSummaryResponse>();
             }
 
@@ -421,23 +438,35 @@ public class ListReportDocumentBuilder : IDocumentBuilder
             model.Table.Columns = new List<DocumentColumn>
             {
                 new() { Header = "RECEIPT NO", RelativeWidth = 1.0f, IsMonoFont = true },
-                new() { Header = "CLIENT HEAD", RelativeWidth = 2.0f, IsBold = true },
                 new() { Header = "DATE", RelativeWidth = 1.0f, Alignment = ColumnAlignment.Center },
+                new() { Header = "CLIENT HEAD", RelativeWidth = 1.8f, IsBold = true },
+                new() { Header = "SALESMAN", RelativeWidth = 1.4f },
+                new() { Header = "PAYMENT SOURCE", RelativeWidth = 1.7f },
                 new() { Header = "AMOUNT (BHD)", RelativeWidth = 1.2f, Alignment = ColumnAlignment.Right, IsBold = true }
             };
 
             foreach (var x in items)
             {
+                var paymentSource = !string.IsNullOrWhiteSpace(x.PaymentSource)
+                    ? x.PaymentSource
+                    : (!string.IsNullOrWhiteSpace(x.BankName)
+                        ? x.BankName
+                        : (!string.IsNullOrWhiteSpace(x.PaymentMode)
+                            ? (char.ToUpper(x.PaymentMode[0]) + x.PaymentMode[1..])
+                            : "—"));
+
                 model.Table.Rows.Add(new List<string>
                 {
                     x.DocumentNumber ?? $"RCT-{x.ReceiptId}",
-                    x.HeadName,
                     x.CreatedAt.ToString("dd/MM/yyyy"),
+                    !string.IsNullOrWhiteSpace(x.HeadName) ? x.HeadName : (x.AgentName ?? "—"),
+                    !string.IsNullOrWhiteSpace(x.SalesmanName) ? x.SalesmanName : "—",
+                    paymentSource,
                     x.Amount.ToString("0.000")
                 });
             }
 
-            model.Table.TotalRow = new List<string> { "TOTAL", $"{items.Count} Record(s)", "", $"{totalSales:0.000} BHD" };
+            model.Table.TotalRow = new List<string> { "TOTAL", "", $"{items.Count} Record(s)", "", "", $"{totalSales:0.000} BHD" };
         }
         else if (type == "ledger")
         {

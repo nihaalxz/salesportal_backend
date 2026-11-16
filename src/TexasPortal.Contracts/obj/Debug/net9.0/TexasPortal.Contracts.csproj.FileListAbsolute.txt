@@ -11,3 +11,4 @@ D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_p
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Debug\net9.0\ref\TexasPortal.Contracts.dll
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\bin\Debug\net9.0\TexasPortal.Contracts.runtimeconfig.json
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Debug\net9.0\TexasPortal.Contracts.genruntimeconfig.cache
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Contracts\obj\Debug\net9.0\TexasPortal.Contracts.sourcelink.json

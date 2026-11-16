@@ -298,7 +298,7 @@ public sealed class CreateVisaBookingHandler
                     Agent = request.Agent,
                     AgentId = agentId,
                     ProcessingStatus = "pending",
-                    PaymentStatus = "pending",
+                    PaymentStatus = "success",
                     PayableAmount = totalPayable,
                     ExpectedSupplierCost = 0m, // will update post applicant loop
                     Profit = 0m, // will update post applicant loop
@@ -357,7 +357,7 @@ public sealed class CreateVisaBookingHandler
                         BankId = request.BankId,
                         BankName = request.BankName,
                         PaymentMethod = request.PaymentMethod,
-                        PaymentStatus = "pending",
+                        PaymentStatus = "success",
                         PaymentProof = request.PaymentProof,
                         PaymentReference = request.PaymentReference,
                         GovtFeeStatus = "pending",
@@ -425,6 +425,27 @@ public sealed class CreateVisaBookingHandler
                 else if (clientTypeLower == "customer" && targetHeadId.HasValue)
                 {
                     // Non-credit cash/online ledger entry
+                    string? countryName = null;
+                    try
+                    {
+                        var visaCountries = await _agentsApiClient.GetVisaCountriesAsync(transactionCt);
+                        countryName = visaCountries?.FirstOrDefault(c => c.Id == request.CountryId)?.Name;
+                    }
+                    catch { }
+
+                    var appNames = request.Applicants.Select(a => ((a.FName ?? "") + " " + (a.LName ?? "")).Trim()).Where(n => !string.IsNullOrEmpty(n)).ToList();
+                    var applicantDisplay = appNames.Count switch
+                    {
+                        0 => "Applicant",
+                        1 => appNames[0],
+                        2 => $"{appNames[0]}, {appNames[1]}",
+                        _ => $"{appNames[0]} (+{appNames.Count - 1} more)"
+                    };
+
+                    var visaDesc = !string.IsNullOrWhiteSpace(countryName)
+                        ? $"Visa Application #{booking.Id}: {applicantDisplay} - {countryName} ({request.VisaPackName})"
+                        : $"Visa Application #{booking.Id}: {applicantDisplay} ({request.VisaPackName})";
+
                     var ledger = new HeadLedger
                     {
                         HeadId = targetHeadId.Value,
@@ -432,7 +453,7 @@ public sealed class CreateVisaBookingHandler
                         ServiceId = booking.Id,
                         Debit = totalPayable,
                         Credit = 0m,
-                        Description = $"Visa Booking ({request.VisaPackName}): {request.Applicants.Count} applicants",
+                        Description = visaDesc,
                         CreatedAt = DateTime.UtcNow
                     };
                     _db.HeadLedgers.Add(ledger);

@@ -38,7 +38,7 @@ public sealed class InternalDisputesController : ControllerBase
         CancellationToken ct = default)
     {
         if (page < 1) return BadRequest("page must be >= 1");
-        if (pageSize is < 1 or > 100) return BadRequest("pageSize must be between 1 and 100");
+        if (pageSize is < 1 or > 1000) return BadRequest("pageSize must be between 1 and 1000");
 
         var result = await _readService.GetDisputesAsync(page, pageSize, status, search, sort, ct);
         return Ok(result);

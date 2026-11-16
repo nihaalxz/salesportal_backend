@@ -523,7 +523,7 @@ public class VisaBookingWriteTests : IClassFixture<SalesApiTestFactory>, IAsyncL
             SupplierId: 2,
             Applicants: new List<VisaApplicantRequest>
             {
-                new("Mr.", "FName", "LName", DateTime.UtcNow.AddYears(-30), "Bahraini", null, "97312345", "test@test.com", "Passport123", null, 120.000m, 40.000m, false) // 120 is > 100 wallet
+                new("Mr.", "FName", "LName", DateTime.UtcNow.AddYears(-30), "Bahraini", null, "97312345", "test@test.com", "Passport123", null, 120.000m, 40.000m, false, PassportCopy: "dummy_copy.pdf") // 120 is > 100 wallet
             }
         );
 

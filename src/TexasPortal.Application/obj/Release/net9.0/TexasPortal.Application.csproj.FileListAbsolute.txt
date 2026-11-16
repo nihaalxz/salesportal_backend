@@ -15,3 +15,4 @@ D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_p
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Release\net9.0\refint\TexasPortal.Application.dll
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Release\net9.0\TexasPortal.Application.pdb
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Release\net9.0\ref\TexasPortal.Application.dll
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Application\obj\Release\net9.0\TexasPortal.Application.sourcelink.json

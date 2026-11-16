@@ -14,6 +14,7 @@ public class ProcessVisaRequest
 {
     public string? VisaAppId { get; set; }
     public long ProcessedBy { get; set; }
+    public bool IsAdditive { get; set; }
     public List<GovtFeeInput> GovtFees { get; set; } = new();
 }
 
@@ -53,6 +54,7 @@ public class RequestDocUpdateRequest
 public class ProcessVfsRequest
 {
     public long ProcessedBy { get; set; }
+    public bool IsAdditive { get; set; }
     public List<GovtFeeInput> GovtFees { get; set; } = new();
 }
 

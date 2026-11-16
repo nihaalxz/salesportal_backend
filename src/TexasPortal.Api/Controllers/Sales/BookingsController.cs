@@ -85,7 +85,7 @@ public sealed class BookingsController : ControllerBase
         CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (page < 1 || pageSize is < 1 or > 100) return BadRequest("Invalid paging parameters.");
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
         var term = searchTerm ?? search;
         bool? effectiveDealClosed = isDealClosed;
         if (!effectiveDealClosed.HasValue && !string.IsNullOrWhiteSpace(dealStatus)) {
@@ -191,7 +191,7 @@ public sealed class BookingsController : ControllerBase
         CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (page < 1 || pageSize is < 1 or > 100) return BadRequest("Invalid paging parameters.");
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
         var term = searchTerm ?? search;
         bool? effectiveDealClosed = isDealClosed;
         if (!effectiveDealClosed.HasValue && !string.IsNullOrWhiteSpace(dealStatus)) {
@@ -303,7 +303,7 @@ public sealed class BookingsController : ControllerBase
         CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (page < 1 || pageSize is < 1 or > 100) return BadRequest("Invalid paging parameters.");
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
         var term = searchTerm ?? search;
         bool? effectiveDealClosed = isDealClosed;
         if (!effectiveDealClosed.HasValue && !string.IsNullOrWhiteSpace(dealStatus)) {
@@ -490,7 +490,7 @@ public sealed class BookingsController : ControllerBase
         CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (page < 1 || pageSize is < 1 or > 100) return BadRequest("Invalid paging parameters.");
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
         var term = searchTerm ?? search;
         bool? effectiveDealClosed = isDealClosed;
         if (!effectiveDealClosed.HasValue && !string.IsNullOrWhiteSpace(dealStatus)) {
@@ -513,7 +513,7 @@ public sealed class BookingsController : ControllerBase
         CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (page < 1 || pageSize is < 1 or > 100) return BadRequest("Invalid paging parameters.");
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
         var term = searchTerm ?? search;
         
         bool? effectiveDealClosed = isDealClosed;
@@ -537,7 +537,7 @@ var result = await _salesReadService.GetHolidayPackagesAsync(userId, new(page, p
         CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (page < 1 || pageSize is < 1 or > 100) return BadRequest("Invalid paging parameters.");
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
         var term = searchTerm ?? search;
         
         bool? effectiveDealClosed = isDealClosed;
@@ -561,7 +561,7 @@ var result = await _salesReadService.GetTransportationsAsync(userId, new(page, p
         CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (page < 1 || pageSize is < 1 or > 100) return BadRequest("Invalid paging parameters.");
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
         var term = searchTerm ?? search;
         bool? effectiveDealClosed = isDealClosed;
         if (!effectiveDealClosed.HasValue && !string.IsNullOrWhiteSpace(dealStatus)) {

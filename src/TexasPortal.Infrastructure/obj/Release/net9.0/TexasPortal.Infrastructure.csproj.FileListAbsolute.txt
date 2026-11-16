@@ -36,3 +36,4 @@ D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_p
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Infrastructure\bin\Release\net9.0\LatoFont\Lato-Thin.ttf
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Infrastructure\bin\Release\net9.0\LatoFont\Lato-ThinItalic.ttf
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Infrastructure\bin\Release\net9.0\LatoFont\OFL.txt
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Infrastructure\obj\Release\net9.0\TexasPortal.Infrastructure.sourcelink.json

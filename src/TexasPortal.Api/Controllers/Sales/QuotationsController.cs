@@ -56,7 +56,7 @@ public sealed class QuotationsController : ControllerBase
         CancellationToken ct = default)
     {
         if (!TryGetUserId(out var userId)) return Unauthorized();
-        if (page < 1 || pageSize is < 1 or > 100) return BadRequest("Invalid paging parameters.");
+        if (page < 1 || pageSize is < 1 or > 1000) return BadRequest("Invalid paging parameters.");
 
         var result = await _salesReadService.GetQuotationsAsync(userId, new QuotationsListQuery(page, pageSize, searchTerm, clientType, status), ct);
         return Ok(result);

@@ -38,7 +38,7 @@ public class VisaInvoiceBuilder : IInvoiceBuilder
     {
         var booking = await _operationsReadService.GetVisaApplicationByIdAsync(id, ct);
 
-        if (booking is null) return null;
+        if (booking is null || (userId > 0 && booking.UserId != userId)) return null;
 
         var items = new List<InvoiceLineItem>();
         int itemNo = 1;

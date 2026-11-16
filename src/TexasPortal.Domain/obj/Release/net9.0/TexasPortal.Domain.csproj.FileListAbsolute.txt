@@ -11,3 +11,4 @@ D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_p
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Release\net9.0\ref\TexasPortal.Domain.dll
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\bin\Release\net9.0\TexasPortal.Domain.runtimeconfig.json
 D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Release\net9.0\TexasPortal.Domain.genruntimeconfig.cache
+D:\freelanceprojects\TexasPortalsDotNet\texas_sales_portal_backend\texas_sales_portal_backend\src\TexasPortal.Domain\obj\Release\net9.0\TexasPortal.Domain.sourcelink.json

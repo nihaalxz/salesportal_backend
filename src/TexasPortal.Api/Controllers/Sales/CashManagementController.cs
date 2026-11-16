@@ -53,7 +53,7 @@ public sealed class CashManagementController : ControllerBase
             return Unauthorized();
 
         if (page < 1) return BadRequest("page must be >= 1");
-        if (pageSize is < 1 or > 100) return BadRequest("pageSize must be between 1 and 100");
+        if (pageSize is < 1 or > 1000) return BadRequest("pageSize must be between 1 and 1000");
 
         var result = await _salesReadService.GetDepositsAsync(userId, new(page, pageSize, status), ct);
         return Ok(result);

@@ -203,6 +203,29 @@ public class HeadsWriteTests : IClassFixture<SalesApiTestFactory>, IAsyncLifetim
     }
 
     [Fact]
+    public async Task CreateHead_DuplicateMobileNo_ByDifferentSalesman_Returns_422()
+    {
+        // Head owned by Salesman A has MobileNo: "97311111111"
+        // Salesman B tries to create a head with the same MobileNo
+        var request = new HttpRequestMessage(HttpMethod.Post, "/api/sales/heads")
+        {
+            Content = JsonContent.Create(new CreateHeadRequest(
+                FirstName: "Bob",
+                LastName: "Client",
+                Type: "customer",
+                MobileNo: "97311111111", // Same mobile as Salesman A's head
+                Email: "unique.bob@example.com",
+                Nationality: "Bahraini",
+                Address: "Manama"
+            ))
+        };
+        SetAuthHeaders(request, role: "Salesman", customUserId: _otherSalesmanId);
+
+        var response = await _client.SendAsync(request);
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, response.StatusCode);
+    }
+
+    [Fact]
     public async Task UpdateHead_Succeeds()
     {
         var request = new HttpRequestMessage(HttpMethod.Put, $"/api/sales/heads/{_headId}")

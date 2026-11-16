@@ -31,9 +31,7 @@ public sealed class UpdateHeadHandler
         else if (request.FirstName.Length > 255)
             errors["firstName"] = ["First name must not exceed 255 characters."];
 
-        if (string.IsNullOrWhiteSpace(request.LastName))
-            errors["lastName"] = ["Last name is required."];
-        else if (request.LastName.Length > 255)
+        if (!string.IsNullOrWhiteSpace(request.LastName) && request.LastName.Length > 255)
             errors["lastName"] = ["Last name must not exceed 255 characters."];
 
         var typeLower = (request.Type ?? "").ToLowerInvariant();
@@ -86,9 +84,20 @@ public sealed class UpdateHeadHandler
             return UpdateHeadResult.ValidationError(errors);
         }
 
+        // Check mobile number uniqueness excluding this head ID
+        var cleanMobile = request.MobileNo.Trim();
+        var mobileExists = await _db.Heads
+            .AnyAsync(h => h.Id != command.HeadId && h.MobileNo == cleanMobile && h.DeletedAt == null, ct);
+
+        if (mobileExists)
+        {
+            errors["mobileNo"] = ["A customer head with this mobile number already exists."];
+            return UpdateHeadResult.ValidationError(errors);
+        }
+
         // ── 2. Update Details ─────────────────────────────────────────────────
         head.FirstName = request.FirstName.Trim();
-        head.LastName = request.LastName.Trim();
+        head.LastName = string.IsNullOrWhiteSpace(request.LastName) ? null : request.LastName.Trim();
         head.Type = typeLower;
         head.MobileNo = request.MobileNo.Trim();
         head.Email = request.Email.Trim();

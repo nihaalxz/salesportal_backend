@@ -54,7 +54,7 @@ public sealed class ReceiptsController : ControllerBase
             return Unauthorized();
 
         if (page < 1) return BadRequest("page must be >= 1");
-        if (pageSize is < 1 or > 100) return BadRequest("pageSize must be between 1 and 100");
+        if (pageSize is < 1 or > 1000) return BadRequest("pageSize must be between 1 and 1000");
 
         var query = new ReceiptsListQuery(page, pageSize, searchTerm);
         var result = await _salesReadService.GetReceiptsAsync(userId, query, ct);
@@ -77,38 +77,15 @@ public sealed class ReceiptsController : ControllerBase
 
     /// <summary>Creates a new payment receipt.</summary>
     [HttpPost]
-    [ProducesResponseType(typeof(ReceiptDetailResponse), 201)]
-    [ProducesResponseType(400)]
-    [ProducesResponseType(401)]
-    public async Task<IActionResult> CreateReceipt([FromBody] CreateReceiptRequest request, CancellationToken ct)
+    [ProducesResponseType(Microsoft.AspNetCore.Http.StatusCodes.Status410Gone)]
+    public Task<IActionResult> CreateReceipt([FromBody] CreateReceiptRequest request, CancellationToken ct)
     {
-        if (!_currentUser.IsAuthenticated || _currentUser.UserId is not { } userId)
-            return Unauthorized();
-
-        if (!string.IsNullOrWhiteSpace(request.PaymentProof))
+        return Task.FromResult<IActionResult>(StatusCode(Microsoft.AspNetCore.Http.StatusCodes.Status410Gone, new ProblemDetails
         {
-            try
-            {
-                var savedPath = await Base64FileHelper.SavePaymentProofAsync(request.PaymentProof, _env.WebRootPath, ct);
-                request = request with { PaymentProof = savedPath };
-            }
-            catch (ArgumentException ex)
-            {
-                return BadRequest(new ProblemDetails { Status = 400, Title = "Bad Request", Detail = ex.Message });
-            }
-        }
-
-        var result = await _createReceiptHandler.HandleAsync(new CreateReceiptCommand(userId, request), ct);
-        if (result.Status == CreateReceiptResultStatus.ValidationError)
-            return UnprocessableEntity(new ProblemDetails
-            {
-                Status = 422,
-                Title = "Validation Failed",
-                Detail = "Please correct validation errors.",
-                Extensions = { ["errors"] = result.Errors }
-            });
-
-        return CreatedAtAction(nameof(GetReceipt), new { id = result.Response!.Id }, result.Response);
+            Status = Microsoft.AspNetCore.Http.StatusCodes.Status410Gone,
+            Title = "Gone",
+            Detail = "Receipts are now recorded by Accounts."
+        }));
     }
 
 

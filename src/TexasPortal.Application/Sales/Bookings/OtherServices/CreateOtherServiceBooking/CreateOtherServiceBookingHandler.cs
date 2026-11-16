@@ -299,7 +299,7 @@ public sealed class CreateOtherServiceBookingHandler
                     PaymentProof = request.PaymentProof,
                     BankId = (request.PaymentMethod ?? "").ToLower() == "online" ? request.BankId : null,
                     BankName = (request.PaymentMethod ?? "").ToLower() == "online" ? request.BankName : null,
-                    PaymentStatus = "pending",
+                    PaymentStatus = "success",
                     ProcessingStatus = request.Status ?? "pending",
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow

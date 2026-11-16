@@ -387,7 +387,7 @@ public class VfsAppointmentConfiguration : IEntityTypeConfiguration<VfsAppointme
         builder.Property(x => x.Supplier).HasColumnName("supplier").HasMaxLength(255);
         builder.Property(x => x.IsInhouse).HasColumnName("is_inhouse");
         builder.Property(x => x.SupplierId).HasColumnName("supplier_id");
-        builder.Property(x => x.SupplierName).HasColumnName("supplier_name").HasMaxLength(255);
+        builder.Ignore(x => x.SupplierName);
         builder.Property(x => x.Country).HasColumnName("country").HasMaxLength(255);
         builder.Property(x => x.VisaType).HasColumnName("visa_type").HasMaxLength(255);
         builder.Property(x => x.PayableAmount).HasColumnName("payable_amount").HasPrecision(15, 3);

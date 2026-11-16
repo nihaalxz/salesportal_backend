@@ -176,7 +176,7 @@ public class CustomerAccountCommandService : ICustomerAccountCommandService, ICu
 
         await _db.SaveChangesAsync(ct);
 
-        var paymentStatus = output.ReceivableAmount.Amount == 0m ? "success" : "pending";
+        var paymentStatus = "success";
         var balanceAfter = summary.Balance - request.TotalAmount;
         var outstandingAfter = openReceivables + output.ReceivableAmount.Amount;
 

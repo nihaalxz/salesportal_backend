@@ -193,12 +193,20 @@ public sealed class ReceiptApprovalOrchestrator
 
                             if (receipt.HeadId.HasValue)
                             {
+                                var modeLower = (receipt.PaymentMode ?? "").ToLowerInvariant();
+                                var accountName = modeLower switch
+                                {
+                                    "cash" => !string.IsNullOrWhiteSpace(receipt.BankName) ? receipt.BankName : "Cash Account",
+                                    "wallet" => "Customer Wallet",
+                                    _ => !string.IsNullOrWhiteSpace(receipt.BankName) ? receipt.BankName : "Bank Account"
+                                };
+
                                 _db.HeadLedgers.Add(new HeadLedger
                                 {
                                     HeadId = receipt.HeadId.Value,
                                     ServiceType = receipt.Service ?? "deposit",
                                     ServiceId = receipt.Id,
-                                    Description = $"Balance deposit approved via Receipt {receipt.DocumentNumber}: {receipt.Narration}",
+                                    Description = $"Deposit #{receipt.DocumentNumber ?? receipt.ReceiptId}: via {accountName} ({receipt.PaymentMode})",
                                     Debit = 0,
                                     Credit = receipt.Amount,
                                     CreatedAt = DateTime.UtcNow

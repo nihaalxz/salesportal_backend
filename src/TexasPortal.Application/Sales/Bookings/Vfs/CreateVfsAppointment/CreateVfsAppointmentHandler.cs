@@ -296,7 +296,7 @@ public sealed class CreateVfsAppointmentHandler
                     BankId = request.PaymentMethod == "online" ? request.BankId : null,
                     BankName = request.PaymentMethod == "online" ? request.BankName : null,
                     PaymentProof = request.PaymentProof,
-                    PaymentStatus = "pending",
+                    PaymentStatus = "success",
                     ProcessingStatus = "pending",
                     AppointmentDate = request.AppointmentDate,
                     AppointmentTime = request.AppointmentTime,
@@ -365,7 +365,7 @@ public sealed class CreateVfsAppointmentHandler
                         CreditTerm: "Days30",
                         AutoApplyBalance: true,
                         IdempotencyKey: command.IdempotencyKey,
-                        Remarks: $"Credit Sale for VFS Appointment #{docNo}"
+                        Remarks: $"Credit Sale for VFS Service #{docNo}"
                     );
 
                     var creditRes = await _customerAccountCommandService.AuthorizeAndProcessCreditBookingAsync(creditRequest, transactionCt);
@@ -380,6 +380,7 @@ public sealed class CreateVfsAppointmentHandler
                         HeadId = request.HeadId.Value,
                         ServiceId = vfsApp.Id,
                         ServiceType = "Vfs",
+                        Description = $"VFS Service #{vfsApp.Id}: {request.Name} ({request.Country})",
                         Debit = payableAmount,
                         Credit = 0m,
                         CreatedAt = DateTime.UtcNow

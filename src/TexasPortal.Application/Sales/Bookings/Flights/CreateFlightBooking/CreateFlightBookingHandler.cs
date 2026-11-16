@@ -294,7 +294,7 @@ public sealed class CreateFlightBookingHandler
                     PaymentMethod = request.PaymentMethod!,
                     BankId = methodLower == "online" ? request.BankId : null,
                     BankName = methodLower == "online" ? request.BankName : null,
-                    PaymentStatus = "pending",
+                    PaymentStatus = "success",
                     ProcessingStatus = "success",
                     PayableAmount = totalPayable,
                     ExpectedSupplierCost = isInhouseBooking ? 0m : totalExpectedSupplierCost,

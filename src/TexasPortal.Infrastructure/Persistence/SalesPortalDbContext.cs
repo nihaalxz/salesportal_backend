@@ -125,6 +125,11 @@ public class SalesPortalDbContext : DbContext, ISalesPortalDbContext
         return base.SaveChangesAsync(cancellationToken);
     }
 
+    public Task<int> ExecuteSqlRawAsync(string sql, object[] parameters, CancellationToken cancellationToken = default)
+    {
+        return Database.ExecuteSqlRawAsync(sql, parameters, cancellationToken);
+    }
+
     protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
     {
         optionsBuilder.ConfigureWarnings(warnings =>
@@ -194,6 +199,12 @@ public class SalesPortalDbContext : DbContext, ISalesPortalDbContext
             .Property(r => r.ReceiptType)
             .HasConversion<int>()
             .HasDefaultValue(TexasPortal.Domain.Enums.ReceiptType.General);
+
+        modelBuilder.Entity<Receipt>()
+            .HasIndex(r => r.ExternalReference)
+            .IsUnique()
+            .HasFilter("[ExternalReference] IS NOT NULL")
+            .HasDatabaseName("IX_Receipts_ExternalReference");
 
         // ── Idempotent Ledger: unique filtered index on CorrelationId ───────────
         modelBuilder.Entity<ReceivableTransaction>()

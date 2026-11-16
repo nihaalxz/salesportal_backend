@@ -21,6 +21,8 @@ public class Receipt
     public long? BankId { get; set; }
     public string? BankName { get; set; }
     public long? AgentId { get; set; }
+    public string? ExternalReference { get; set; }
+    public string? Source { get; set; }
     public DateTime? DeletedAt { get; set; }
     public DateTime? CreatedAt { get; set; }
     public DateTime? UpdatedAt { get; set; }

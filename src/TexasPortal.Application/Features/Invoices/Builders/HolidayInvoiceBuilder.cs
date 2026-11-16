@@ -37,7 +37,7 @@ public class HolidayInvoiceBuilder : IInvoiceBuilder
     {
         var booking = await _operationsReadService.GetHolidayPackageByIdAsync(id, ct);
 
-        if (booking is null) return null;
+        if (booking is null || (userId > 0 && booking.CreatedBy != userId)) return null;
 
         var items = new List<InvoiceLineItem>();
 

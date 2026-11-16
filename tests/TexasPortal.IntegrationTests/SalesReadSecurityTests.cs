@@ -89,6 +89,11 @@ public class SalesReadSecurityTests : IAsyncDisposable
             return Task.CompletedTask;
         }
 
+        public Task<string?> GetBookingApproverAsync(string serviceType, string bookingId, string? docNumber = null, CancellationToken ct = default)
+        {
+            return Task.FromResult<string?>(null);
+        }
+
         public Task<TexasPortal.Contracts.Common.PagedResponse<TexasPortal.Contracts.Sales.Heads.HeadLedgerEntryResponse>> GetAgentLedgerAsync(long agentId, int page, int pageSize, CancellationToken ct)
         {
             var empty = TexasPortal.Contracts.Common.PagedResponse<TexasPortal.Contracts.Sales.Heads.HeadLedgerEntryResponse>.Create(

@@ -49,7 +49,7 @@ public sealed class DisputesController : ControllerBase
             return Unauthorized();
 
         if (page < 1) return BadRequest("page must be >= 1");
-        if (pageSize is < 1 or > 100) return BadRequest("pageSize must be between 1 and 100");
+        if (pageSize is < 1 or > 1000) return BadRequest("pageSize must be between 1 and 1000");
 
         var query = new DisputesListQuery(page, pageSize, status, searchTerm);
         var result = await _salesReadService.GetDisputesAsync(userId, query, ct);

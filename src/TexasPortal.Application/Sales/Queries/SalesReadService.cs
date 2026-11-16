@@ -277,11 +277,24 @@ public sealed class SalesReadService : ISalesReadService
             if (!string.IsNullOrWhiteSpace(query.SearchTerm))
             {
                 var term = query.SearchTerm.Trim().ToLower();
-                q = q.Where(h =>
-                    (h.FirstName != null && h.FirstName.ToLower().Contains(term)) ||
-                    (h.LastName != null && h.LastName.ToLower().Contains(term)) ||
-                    h.Email.ToLower().Contains(term) ||
-                    h.MobileNo.Contains(term));
+                var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var tok in tokens)
+                {
+                    q = q.Where(h =>
+                        (h.FirstName != null && h.FirstName.ToLower().Contains(tok)) ||
+                        (h.LastName != null && h.LastName.ToLower().Contains(tok)) ||
+                        ((h.FirstName != null ? h.FirstName : "") + " " + (h.LastName != null ? h.LastName : "")).ToLower().Contains(tok) ||
+                        (h.Nationality != null && h.Nationality.ToLower().Contains(tok)) ||
+                        h.Email.ToLower().Contains(tok) ||
+                        h.MobileNo.Contains(tok));
+                }
+            }
+
+            if (!string.IsNullOrWhiteSpace(query.CountryCode))
+            {
+                var code = query.CountryCode.Trim();
+                var codeWithoutPlus = code.TrimStart('+');
+                q = q.Where(h => h.MobileNo.StartsWith(code) || h.MobileNo.StartsWith(codeWithoutPlus));
             }
 
             var totalCount = await q.CountAsync(ct);
@@ -365,11 +378,17 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim().ToLower();
-            dbHeadsQuery = dbHeadsQuery.Where(h =>
-                (h.FirstName != null && h.FirstName.ToLower().Contains(term)) ||
-                (h.LastName != null && h.LastName.ToLower().Contains(term)) ||
-                h.Email.ToLower().Contains(term) ||
-                h.MobileNo.Contains(term));
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var tok in tokens)
+            {
+                dbHeadsQuery = dbHeadsQuery.Where(h =>
+                    (h.FirstName != null && h.FirstName.ToLower().Contains(tok)) ||
+                    (h.LastName != null && h.LastName.ToLower().Contains(tok)) ||
+                    ((h.FirstName != null ? h.FirstName : "") + " " + (h.LastName != null ? h.LastName : "")).ToLower().Contains(tok) ||
+                    (h.Nationality != null && h.Nationality.ToLower().Contains(tok)) ||
+                    h.Email.ToLower().Contains(tok) ||
+                    h.MobileNo.Contains(tok));
+            }
         }
 
         var dbHeads = await dbHeadsQuery
@@ -425,6 +444,73 @@ public sealed class SalesReadService : ISalesReadService
             .ToList();
 
         return PagedResponse<HeadSummaryResponse>.Create(paginated, total, query.Page, query.PageSize);
+    }
+
+    public async Task<List<CountryCodeOptionResponse>> GetAvailableCountryCodesAsync(long userId, string? type, CancellationToken ct = default)
+    {
+        var headsQuery = _db.Heads
+            .AsNoTracking()
+            .Where(h => h.CreatedBy == userId && h.DeletedAt == null);
+
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            headsQuery = headsQuery.Where(h => h.Type == type.Trim().ToLower());
+        }
+
+        var heads = await headsQuery
+            .Select(h => new { h.MobileNo, h.Nationality })
+            .ToListAsync(ct);
+
+        var knownCodes = new (string Code, string Name, string Flag)[]
+        {
+            ("+973", "Bahrain", "🇧🇭"),
+            ("+966", "Saudi Arabia", "🇸🇦"),
+            ("+971", "United Arab Emirates", "🇦🇪"),
+            ("+965", "Kuwait", "🇰🇼"),
+            ("+974", "Qatar", "🇶🇦"),
+            ("+968", "Oman", "🇴🇲"),
+            ("+91", "India", "🇮🇳"),
+            ("+92", "Pakistan", "🇵🇰"),
+            ("+880", "Bangladesh", "🇧🇩"),
+            ("+63", "Philippines", "🇵🇭"),
+            ("+20", "Egypt", "🇪🇬"),
+            ("+44", "United Kingdom", "🇬🇧"),
+            ("+1", "United States", "🇺🇸"),
+        };
+
+        var groups = new Dictionary<string, (string Name, string Flag, int Count)>();
+
+        foreach (var h in heads)
+        {
+            var mob = h.MobileNo?.Trim() ?? "";
+            if (string.IsNullOrWhiteSpace(mob)) continue;
+            if (!mob.StartsWith("+")) mob = "+" + mob;
+
+            var match = knownCodes.FirstOrDefault(k => mob.StartsWith(k.Code));
+            if (match != default)
+            {
+                if (!groups.ContainsKey(match.Code))
+                    groups[match.Code] = (match.Name, match.Flag, 0);
+                var cur = groups[match.Code];
+                groups[match.Code] = (cur.Name, cur.Flag, cur.Count + 1);
+            }
+            else
+            {
+                var prefix = mob.Length >= 4 ? mob.Substring(0, 4) : mob;
+                if (!groups.ContainsKey(prefix))
+                    groups[prefix] = (h.Nationality ?? "Other", "🌐", 0);
+                var cur = groups[prefix];
+                groups[prefix] = (cur.Name, cur.Flag, cur.Count + 1);
+            }
+        }
+
+        return groups.Select(g => new CountryCodeOptionResponse
+        {
+            CountryCode = g.Key,
+            CountryName = g.Value.Name,
+            Flag = g.Value.Flag,
+            Count = g.Value.Count
+        }).OrderByDescending(x => x.Count).ToList();
     }
 
     public async Task<HeadDetailResponse?> GetHeadByIdAsync(long userId, long headId, string? type = null, CancellationToken ct = default)
@@ -560,7 +646,11 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim().ToLower();
-            q = q.Where(l => l.Name.ToLower().Contains(term) || l.MobileNo.Contains(term));
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var tok in tokens)
+            {
+                q = q.Where(l => l.Name.ToLower().Contains(tok) || l.MobileNo.Contains(tok));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(query.Status))
@@ -630,25 +720,31 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim();
-            q = q.Where(x =>
-                (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{term}%")) ||
-                (x.FromLocation != null && EF.Functions.Like(x.FromLocation, $"%{term}%")) ||
-                (x.ToLocation != null && EF.Functions.Like(x.ToLocation, $"%{term}%")) ||
-                (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{term}%")) ||
-                (x.CareOf != null && EF.Functions.Like(x.CareOf, $"%{term}%")) ||
-                (x.Agent != null && EF.Functions.Like(x.Agent, $"%{term}%")) ||
-                (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{term}%")) ||
-                (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{term}%")) ||
-                (x.Head != null && (
-                    (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{term}%")) ||
-                    (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{term}%")) ||
-                    (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{term}%")) ||
-                    (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{term}%"))
-                )) ||
-                x.Passengers.Any(p =>
-                    p.PassengerName != null && EF.Functions.Like(p.PassengerName, $"%{term}%")
-                )
-            );
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token;
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{tok}%")) ||
+                    (x.FromLocation != null && EF.Functions.Like(x.FromLocation, $"%{tok}%")) ||
+                    (x.ToLocation != null && EF.Functions.Like(x.ToLocation, $"%{tok}%")) ||
+                    (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{tok}%")) ||
+                    (x.CareOf != null && EF.Functions.Like(x.CareOf, $"%{tok}%")) ||
+                    (x.Agent != null && EF.Functions.Like(x.Agent, $"%{tok}%")) ||
+                    (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{tok}%")) ||
+                    (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{tok}%")) ||
+                    (x.Head != null && (
+                        (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{tok}%")) ||
+                        (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{tok}%")) ||
+                        EF.Functions.Like(((x.Head.FirstName != null ? x.Head.FirstName : "") + " " + (x.Head.LastName != null ? x.Head.LastName : "")), $"%{tok}%") ||
+                        (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{tok}%")) ||
+                        (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{tok}%"))
+                    )) ||
+                    x.Passengers.Any(p =>
+                        p.PassengerName != null && EF.Functions.Like(p.PassengerName, $"%{tok}%")
+                    )
+                );
+            }
         }
         q = q.OrderByDescending(x => x.CreatedAt);
 
@@ -712,23 +808,29 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim();
-            q = q.Where(x =>
-                (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{term}%")) ||
-                (x.GuestName != null && EF.Functions.Like(x.GuestName, $"%{term}%")) ||
-                (x.Country != null && EF.Functions.Like(x.Country, $"%{term}%")) ||
-                (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{term}%")) ||
-                (x.SupplierName != null && EF.Functions.Like(x.SupplierName, $"%{term}%")) ||
-                (x.CareOf != null && EF.Functions.Like(x.CareOf, $"%{term}%")) ||
-                (x.Agent != null && EF.Functions.Like(x.Agent, $"%{term}%")) ||
-                (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{term}%")) ||
-                (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{term}%")) ||
-                (x.Head != null && (
-                    (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{term}%")) ||
-                    (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{term}%")) ||
-                    (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{term}%")) ||
-                    (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{term}%"))
-                ))
-            );
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token;
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{tok}%")) ||
+                    (x.GuestName != null && EF.Functions.Like(x.GuestName, $"%{tok}%")) ||
+                    (x.Country != null && EF.Functions.Like(x.Country, $"%{tok}%")) ||
+                    (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{tok}%")) ||
+                    (x.SupplierName != null && EF.Functions.Like(x.SupplierName, $"%{tok}%")) ||
+                    (x.CareOf != null && EF.Functions.Like(x.CareOf, $"%{tok}%")) ||
+                    (x.Agent != null && EF.Functions.Like(x.Agent, $"%{tok}%")) ||
+                    (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{tok}%")) ||
+                    (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{tok}%")) ||
+                    (x.Head != null && (
+                        (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{tok}%")) ||
+                        (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{tok}%")) ||
+                        EF.Functions.Like(((x.Head.FirstName != null ? x.Head.FirstName : "") + " " + (x.Head.LastName != null ? x.Head.LastName : "")), $"%{tok}%") ||
+                        (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{tok}%")) ||
+                        (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{tok}%"))
+                    ))
+                );
+            }
         }
         q = q.OrderByDescending(x => x.CreatedAt);
 
@@ -775,28 +877,55 @@ public sealed class SalesReadService : ISalesReadService
             var prStatus = query.ProcessingStatus.Trim().ToLower();
             q = q.Where(x => x.ProcessingStatus.ToLower() == prStatus);
         }
+
+        List<TexasPortal.Contracts.Sales.Bookings.VisaCountryMasterResponse>? visaCountries = null;
+        var countryMap = new Dictionary<long, string>();
+        try
+        {
+            visaCountries = await _agentsApiClient.GetVisaCountriesAsync(ct);
+            if (visaCountries != null)
+            {
+                foreach (var c in visaCountries) countryMap[c.Id] = c.Name;
+            }
+        }
+        catch { }
+
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim();
-            q = q.Where(x =>
-                (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{term}%")) ||
-                (x.VisaPackName != null && EF.Functions.Like(x.VisaPackName, $"%{term}%")) ||
-                (x.ClientType != null && EF.Functions.Like(x.ClientType, $"%{term}%")) ||
-                (x.Agent != null && EF.Functions.Like(x.Agent, $"%{term}%")) ||
-                (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{term}%")) ||
-                (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{term}%")) ||
-                (x.Head != null && (
-                    (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{term}%")) ||
-                    (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{term}%")) ||
-                    (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{term}%")) ||
-                    (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{term}%"))
-                )) ||
-                x.Applicants.Any(a =>
-                    (a.FName != null && EF.Functions.Like(a.FName, $"%{term}%")) ||
-                    (a.LName != null && EF.Functions.Like(a.LName, $"%{term}%")) ||
-                    (a.PassportNo != null && EF.Functions.Like(a.PassportNo, $"%{term}%"))
-                )
-            );
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token;
+                var matchingCountryIds = visaCountries?
+                    .Where(c => c.Name.Contains(tok, StringComparison.OrdinalIgnoreCase))
+                    .Select(c => (int)c.Id)
+                    .ToList() ?? new List<int>();
+
+                q = q.Where(x =>
+                    (matchingCountryIds.Count > 0 && matchingCountryIds.Contains(x.CountryId)) ||
+                    (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{tok}%")) ||
+                    (x.VisaPackName != null && EF.Functions.Like(x.VisaPackName, $"%{tok}%")) ||
+                    (x.ClientType != null && EF.Functions.Like(x.ClientType, $"%{tok}%")) ||
+                    (x.Agent != null && EF.Functions.Like(x.Agent, $"%{tok}%")) ||
+                    (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{tok}%")) ||
+                    (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{tok}%")) ||
+                    (x.Head != null && (
+                        (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{tok}%")) ||
+                        (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{tok}%")) ||
+                        EF.Functions.Like(((x.Head.FirstName != null ? x.Head.FirstName : "") + " " + (x.Head.LastName != null ? x.Head.LastName : "")), $"%{tok}%") ||
+                        (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{tok}%")) ||
+                        (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{tok}%"))
+                    )) ||
+                    x.Applicants.Any(a =>
+                        (a.Nationality != null && EF.Functions.Like(a.Nationality, $"%{tok}%")) ||
+                        (a.FName != null && EF.Functions.Like(a.FName, $"%{tok}%")) ||
+                        (a.LName != null && EF.Functions.Like(a.LName, $"%{tok}%")) ||
+                        EF.Functions.Like(((a.FName != null ? a.FName : "") + " " + (a.LName != null ? a.LName : "")), $"%{tok}%") ||
+                        (a.PassportNo != null && EF.Functions.Like(a.PassportNo, $"%{tok}%"))
+                    )
+                );
+            }
         }
         q = q.OrderByDescending(x => x.CreatedAt);
 
@@ -808,6 +937,7 @@ public sealed class SalesReadService : ISalesReadService
             {
                 x.Id,
                 x.DocumentNumber,
+                x.CountryId,
                 HeadName = x.Head != null ? (x.Head.FirstName + " " + x.Head.LastName).Trim() : x.Agent,
                 x.VisaPackName,
                 x.ClientType,
@@ -825,24 +955,30 @@ public sealed class SalesReadService : ISalesReadService
             })
             .ToListAsync(ct);
 
-        var items = rawItems.Select(x => new VisaApplicationSummaryResponse
+        var items = rawItems.Select(x =>
         {
-            Id = x.Id,
-            DocumentNumber = x.DocumentNumber,
-            HeadName = x.HeadName,
-            VisaPackName = x.VisaPackName,
-            ClientType = x.ClientType,
-            ProcessingStatus = x.ProcessingStatus,
-            IsDealClosed = x.IsDealClosed,
-            OperationClosed = x.OperationClosed,
-            PaymentStatus = x.PaymentStatus,
-            PaymentMethod = x.PaymentMethod,
-            PayableAmount = x.PayableAmount,
-            Profit = x.Profit,
-            ApplicantCount = x.ApplicantCount,
-            ApplicantNames = string.Join(", ", x.ApplicantNames.Where(n => !string.IsNullOrWhiteSpace(n))),
-            CreatedAt = x.CreatedAt,
-            VisaDocument = x.VisaDocument
+            var countryName = countryMap.TryGetValue(x.CountryId, out var cName) ? cName : x.VisaPackName;
+            return new VisaApplicationSummaryResponse
+            {
+                Id = x.Id,
+                DocumentNumber = x.DocumentNumber,
+                HeadName = x.HeadName,
+                VisaPackName = x.VisaPackName,
+                CountryName = countryName,
+                Country = countryName,
+                ClientType = x.ClientType,
+                ProcessingStatus = x.ProcessingStatus,
+                IsDealClosed = x.IsDealClosed,
+                OperationClosed = x.OperationClosed,
+                PaymentStatus = x.PaymentStatus,
+                PaymentMethod = x.PaymentMethod,
+                PayableAmount = x.PayableAmount,
+                Profit = x.Profit,
+                ApplicantCount = x.ApplicantCount,
+                ApplicantNames = string.Join(", ", x.ApplicantNames.Where(n => !string.IsNullOrWhiteSpace(n))),
+                CreatedAt = x.CreatedAt,
+                VisaDocument = x.VisaDocument
+            };
         }).ToList();
 
         if (items.Count > 0)
@@ -871,22 +1007,28 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim();
-            q = q.Where(x =>
-                (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{term}%")) ||
-                (x.Name != null && EF.Functions.Like(x.Name, $"%{term}%")) ||
-                (x.Country != null && EF.Functions.Like(x.Country, $"%{term}%")) ||
-                (x.VisaType != null && EF.Functions.Like(x.VisaType, $"%{term}%")) ||
-                (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{term}%")) ||
-                (x.Agent != null && EF.Functions.Like(x.Agent, $"%{term}%")) ||
-                (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{term}%")) ||
-                (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{term}%")) ||
-                (x.Head != null && (
-                    (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{term}%")) ||
-                    (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{term}%")) ||
-                    (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{term}%")) ||
-                    (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{term}%"))
-                ))
-            );
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token;
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{tok}%")) ||
+                    (x.Name != null && EF.Functions.Like(x.Name, $"%{tok}%")) ||
+                    (x.Country != null && EF.Functions.Like(x.Country, $"%{tok}%")) ||
+                    (x.VisaType != null && EF.Functions.Like(x.VisaType, $"%{tok}%")) ||
+                    (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{tok}%")) ||
+                    (x.Agent != null && EF.Functions.Like(x.Agent, $"%{tok}%")) ||
+                    (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{tok}%")) ||
+                    (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{tok}%")) ||
+                    (x.Head != null && (
+                        (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{tok}%")) ||
+                        (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{tok}%")) ||
+                        EF.Functions.Like(((x.Head.FirstName != null ? x.Head.FirstName : "") + " " + (x.Head.LastName != null ? x.Head.LastName : "")), $"%{tok}%") ||
+                        (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{tok}%")) ||
+                        (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{tok}%"))
+                    ))
+                );
+            }
         }
         q = q.OrderByDescending(x => x.CreatedAt);
 
@@ -940,21 +1082,27 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim();
-            q = q.Where(x =>
-                (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{term}%")) ||
-                (x.PassengerName != null && EF.Functions.Like(x.PassengerName, $"%{term}%")) ||
-                (x.Country != null && EF.Functions.Like(x.Country, $"%{term}%")) ||
-                (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{term}%")) ||
-                (x.Agent != null && EF.Functions.Like(x.Agent, $"%{term}%")) ||
-                (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{term}%")) ||
-                (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{term}%")) ||
-                (x.Head != null && (
-                    (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{term}%")) ||
-                    (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{term}%")) ||
-                    (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{term}%")) ||
-                    (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{term}%"))
-                ))
-            );
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token;
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{tok}%")) ||
+                    (x.PassengerName != null && EF.Functions.Like(x.PassengerName, $"%{tok}%")) ||
+                    (x.Country != null && EF.Functions.Like(x.Country, $"%{tok}%")) ||
+                    (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{tok}%")) ||
+                    (x.Agent != null && EF.Functions.Like(x.Agent, $"%{tok}%")) ||
+                    (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{tok}%")) ||
+                    (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{tok}%")) ||
+                    (x.Head != null && (
+                        (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{tok}%")) ||
+                        (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{tok}%")) ||
+                        EF.Functions.Like(((x.Head.FirstName != null ? x.Head.FirstName : "") + " " + (x.Head.LastName != null ? x.Head.LastName : "")), $"%{tok}%") ||
+                        (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{tok}%")) ||
+                        (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{tok}%"))
+                    ))
+                );
+            }
         }
         q = q.OrderByDescending(x => x.CreatedAt);
 
@@ -1007,21 +1155,27 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim();
-            q = q.Where(x =>
-                (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{term}%")) ||
-                (x.Name != null && EF.Functions.Like(x.Name, $"%{term}%")) ||
-                (x.Pickup != null && EF.Functions.Like(x.Pickup, $"%{term}%")) ||
-                (x.Drop != null && EF.Functions.Like(x.Drop, $"%{term}%")) ||
-                (x.Agent != null && EF.Functions.Like(x.Agent, $"%{term}%")) ||
-                (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{term}%")) ||
-                (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{term}%")) ||
-                (x.Head != null && (
-                    (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{term}%")) ||
-                    (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{term}%")) ||
-                    (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{term}%")) ||
-                    (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{term}%"))
-                ))
-            );
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token;
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{tok}%")) ||
+                    (x.Name != null && EF.Functions.Like(x.Name, $"%{tok}%")) ||
+                    (x.Pickup != null && EF.Functions.Like(x.Pickup, $"%{tok}%")) ||
+                    (x.Drop != null && EF.Functions.Like(x.Drop, $"%{tok}%")) ||
+                    (x.Agent != null && EF.Functions.Like(x.Agent, $"%{tok}%")) ||
+                    (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{tok}%")) ||
+                    (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{tok}%")) ||
+                    (x.Head != null && (
+                        (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{tok}%")) ||
+                        (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{tok}%")) ||
+                        EF.Functions.Like(((x.Head.FirstName != null ? x.Head.FirstName : "") + " " + (x.Head.LastName != null ? x.Head.LastName : "")), $"%{tok}%") ||
+                        (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{tok}%")) ||
+                        (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{tok}%"))
+                    ))
+                );
+            }
         }
         q = q.OrderByDescending(x => x.CreatedAt);
 
@@ -1061,24 +1215,30 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim();
-            q = q.Where(x =>
-                (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{term}%")) ||
-                (x.ServiceName != null && EF.Functions.Like(x.ServiceName, $"%{term}%")) ||
-                (x.Name != null && EF.Functions.Like(x.Name, $"%{term}%")) ||
-                (x.Narration != null && EF.Functions.Like(x.Narration, $"%{term}%")) ||
-                (x.CareOf != null && EF.Functions.Like(x.CareOf, $"%{term}%")) ||
-                (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{term}%")) ||
-                (x.SupplierName != null && EF.Functions.Like(x.SupplierName, $"%{term}%")) ||
-                (x.Agent != null && EF.Functions.Like(x.Agent, $"%{term}%")) ||
-                (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{term}%")) ||
-                (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{term}%")) ||
-                (x.Head != null && (
-                    (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{term}%")) ||
-                    (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{term}%")) ||
-                    (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{term}%")) ||
-                    (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{term}%"))
-                ))
-            );
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token;
+                q = q.Where(x =>
+                    (x.DocumentNumber != null && EF.Functions.Like(x.DocumentNumber, $"%{tok}%")) ||
+                    (x.ServiceName != null && EF.Functions.Like(x.ServiceName, $"%{tok}%")) ||
+                    (x.Name != null && EF.Functions.Like(x.Name, $"%{tok}%")) ||
+                    (x.Narration != null && EF.Functions.Like(x.Narration, $"%{tok}%")) ||
+                    (x.CareOf != null && EF.Functions.Like(x.CareOf, $"%{tok}%")) ||
+                    (x.Supplier != null && EF.Functions.Like(x.Supplier, $"%{tok}%")) ||
+                    (x.SupplierName != null && EF.Functions.Like(x.SupplierName, $"%{tok}%")) ||
+                    (x.Agent != null && EF.Functions.Like(x.Agent, $"%{tok}%")) ||
+                    (x.PaymentStatus != null && EF.Functions.Like(x.PaymentStatus, $"%{tok}%")) ||
+                    (x.ProcessingStatus != null && EF.Functions.Like(x.ProcessingStatus, $"%{tok}%")) ||
+                    (x.Head != null && (
+                        (x.Head.FirstName != null && EF.Functions.Like(x.Head.FirstName, $"%{tok}%")) ||
+                        (x.Head.LastName != null && EF.Functions.Like(x.Head.LastName, $"%{tok}%")) ||
+                        EF.Functions.Like(((x.Head.FirstName != null ? x.Head.FirstName : "") + " " + (x.Head.LastName != null ? x.Head.LastName : "")), $"%{tok}%") ||
+                        (x.Head.Email != null && EF.Functions.Like(x.Head.Email, $"%{tok}%")) ||
+                        (x.Head.MobileNo != null && EF.Functions.Like(x.Head.MobileNo, $"%{tok}%"))
+                    ))
+                );
+            }
         }
         q = q.OrderByDescending(x => x.CreatedAt);
 
@@ -1177,7 +1337,7 @@ public sealed class SalesReadService : ISalesReadService
         var prefixDoc = "OTH-" + idOrDoc;
         var res = await _db.OtherServices
             .AsNoTracking()
-            .Where(x => ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc) && x.DeletedAt == null)
+            .Where(x => x.CreatedBy == userId && ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc) && x.DeletedAt == null)
             .Select(x => new OtherServiceDetailResponse
             {
                 Id = x.Id,
@@ -1241,7 +1401,7 @@ public sealed class SalesReadService : ISalesReadService
         var prefixDoc = "FLI-" + idOrDoc;
         var res = await _db.FlightBookings
             .AsNoTracking()
-            .Where(x => (parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc)
+            .Where(x => x.UserId == userId && ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc))
             .Select(x => new FlightBookingDetailResponse
             {
                 Id = x.Id,
@@ -1309,7 +1469,7 @@ public sealed class SalesReadService : ISalesReadService
         var prefixDoc = "HOT-" + idOrDoc;
         var res = await _db.HotelBookings
             .AsNoTracking()
-            .Where(x => (parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc)
+            .Where(x => x.UserId == userId && ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc))
             .Select(x => new HotelBookingDetailResponse
             {
                 Id = x.Id,
@@ -1377,7 +1537,7 @@ public sealed class SalesReadService : ISalesReadService
         var prefixDoc = "VISA-" + idOrDoc;
         var result = await _db.SalesVisaApplications
             .AsNoTracking()
-            .Where(x => (parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc)
+            .Where(x => x.UserId == userId && ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc))
             .Select(x => new VisaApplicationDetailResponse
             {
                 Id = x.Id,
@@ -1539,7 +1699,7 @@ public sealed class SalesReadService : ISalesReadService
         var prefixDoc = "VFS-" + idOrDoc;
         var res = await _db.VfsAppointments
             .AsNoTracking()
-            .Where(x => ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc) && x.DeletedAt == null)
+            .Where(x => x.CreatedBy == userId && ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc) && x.DeletedAt == null)
             .Select(x => new VfsAppointmentDetailResponse
             {
                 Id = x.Id,
@@ -1607,7 +1767,7 @@ public sealed class SalesReadService : ISalesReadService
         var prefixDoc = "PKG-" + idOrDoc;
         var result = await _db.HolidayPackages
             .AsNoTracking()
-            .Where(x => ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc) && x.DeletedAt == null)
+            .Where(x => x.CreatedBy == userId && ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc) && x.DeletedAt == null)
             .Select(x => new HolidayPackageDetailResponse
             {
                 Id = x.Id,
@@ -1684,7 +1844,7 @@ public sealed class SalesReadService : ISalesReadService
         var prefixDoc = "TRN-" + idOrDoc;
         var res = await _db.Transportations
             .AsNoTracking()
-            .Where(x => ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc) && x.DeletedAt == null)
+            .Where(x => x.CreatedBy == userId && ((parsedId > 0 && x.Id == parsedId) || x.DocumentNumber == docStr || x.DocumentNumber == prefixDoc) && x.DeletedAt == null)
             .Select(x => new TransportationDetailResponse
             {
                 Id = x.Id,
@@ -1758,10 +1918,15 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
-            q = q.Where(x => (x.FirstName != null && x.FirstName.ToLower().Contains(term)) || 
-                             (x.LastName != null && x.LastName.ToLower().Contains(term)) || 
-                             (x.Email != null && x.Email.ToLower().Contains(term)) || 
-                             (x.MobileNo != null && x.MobileNo.Contains(term)));
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var tok in tokens)
+            {
+                q = q.Where(x => (x.FirstName != null && x.FirstName.ToLower().Contains(tok)) || 
+                                 (x.LastName != null && x.LastName.ToLower().Contains(tok)) || 
+                                 ((x.FirstName != null ? x.FirstName : "") + " " + (x.LastName != null ? x.LastName : "")).ToLower().Contains(tok) ||
+                                 (x.Email != null && x.Email.ToLower().Contains(tok)) || 
+                                 (x.MobileNo != null && x.MobileNo.Contains(tok)));
+            }
         }
         return await q
             .Take(limit)
@@ -2115,21 +2280,30 @@ public sealed class SalesReadService : ISalesReadService
 
         var q = _db.Receipts.AsNoTracking()
             .Include(x => x.Head)
+            .Include(x => x.Creator)
             .Where(x => x.CreatedBy == userId && x.DeletedAt == null);
 
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim().ToLower();
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
             var matchingAgentIds = agents
-                .Where(a => $"{a.FirstName} {a.LastName}".ToLower().Contains(term) || a.Email.ToLower().Contains(term) || a.MobileNo.Contains(term))
+                .Where(a => tokens.All(tok => $"{a.FirstName} {a.LastName}".ToLower().Contains(tok) || a.Email.ToLower().Contains(tok) || a.MobileNo.Contains(tok)))
                 .Select(a => (long?)a.Id)
                 .ToList();
 
-            q = q.Where(x => x.ReceiptId.ToLower().Contains(term) ||
-                             (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
-                             (x.AgentId != null && matchingAgentIds.Contains(x.AgentId)) ||
-                             (x.Head != null && ((x.Head.FirstName + " " + x.Head.LastName).ToLower().Contains(term))));
+            foreach (var tok in tokens)
+            {
+                q = q.Where(x => x.ReceiptId.ToLower().Contains(tok) ||
+                                 (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(tok)) ||
+                                 (x.AgentId != null && matchingAgentIds.Contains(x.AgentId)) ||
+                                 (x.Head != null && (
+                                     (x.Head.FirstName != null && x.Head.FirstName.ToLower().Contains(tok)) ||
+                                     (x.Head.LastName != null && x.Head.LastName.ToLower().Contains(tok)) ||
+                                     ((x.Head.FirstName != null ? x.Head.FirstName : "") + " " + (x.Head.LastName != null ? x.Head.LastName : "")).ToLower().Contains(tok)
+                                 )));
+            }
         }
 
         q = q.OrderByDescending(x => x.CreatedAt);
@@ -2170,7 +2344,10 @@ public sealed class SalesReadService : ISalesReadService
                 PaymentMode = x.PaymentMode,
                 Status = x.Status,
                 CreatedAt = x.CreatedAt ?? DateTime.UtcNow,
-                AgentId = x.AgentId
+                AgentId = x.AgentId,
+                SalesmanName = x.Creator != null ? x.Creator.Name : null,
+                BankName = x.BankName,
+                PaymentSource = x.BankName ?? x.PaymentMode
             };
         }).ToList();
 
@@ -2185,7 +2362,7 @@ public sealed class SalesReadService : ISalesReadService
 
         var receipt = await _db.Receipts.AsNoTracking()
             .Include(x => x.Head)
-            .Where(x => ((parsedId > 0 && x.Id == parsedId) || x.ReceiptId == docStr || x.ReceiptId == prefixDoc || (docStr != null && docStr.Length >= 5 && x.ReceiptId != null && x.ReceiptId.EndsWith(docStr))) && x.DeletedAt == null)
+            .Where(x => x.CreatedBy == userId && ((parsedId > 0 && x.Id == parsedId) || x.ReceiptId == docStr || x.ReceiptId == prefixDoc || (docStr != null && docStr.Length >= 5 && x.ReceiptId != null && x.ReceiptId.EndsWith(docStr))) && x.DeletedAt == null)
             .FirstOrDefaultAsync(ct);
 
         if (receipt == null) return null;
@@ -2571,11 +2748,16 @@ public sealed class SalesReadService : ISalesReadService
         if (!string.IsNullOrWhiteSpace(query.SearchTerm))
         {
             var term = query.SearchTerm.Trim();
-            q = q.Where(x => 
-                EF.Functions.Like(x.DocumentNumber, $"%{term}%") ||
-                EF.Functions.Like(x.CustomerName, $"%{term}%") ||
-                (x.CustomerContact != null && EF.Functions.Like(x.CustomerContact, $"%{term}%")) ||
-                (x.CustomerEmail != null && EF.Functions.Like(x.CustomerEmail, $"%{term}%")));
+            var tokens = term.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            foreach (var token in tokens)
+            {
+                var tok = token;
+                q = q.Where(x => 
+                    EF.Functions.Like(x.DocumentNumber, $"%{tok}%") ||
+                    EF.Functions.Like(x.CustomerName, $"%{tok}%") ||
+                    (x.CustomerContact != null && EF.Functions.Like(x.CustomerContact, $"%{tok}%")) ||
+                    (x.CustomerEmail != null && EF.Functions.Like(x.CustomerEmail, $"%{tok}%")));
+            }
         }
 
         var total = await q.CountAsync(ct);

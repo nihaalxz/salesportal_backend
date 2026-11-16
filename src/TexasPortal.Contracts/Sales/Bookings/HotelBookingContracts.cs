@@ -38,7 +38,6 @@ public sealed record CreateHotelBookingRequest(
     decimal Amount,          // payableAmount
     string? Prefix,
     string GuestName,
-    string? HotelName,
     string Country,
     int Days,
     DateTime CheckInDate,
@@ -48,6 +47,7 @@ public sealed record CreateHotelBookingRequest(
     string? PaymentProof,
     string? PaymentReference,
     string? Status = null,
+    string? HotelName = null,
     List<HotelGuestRequest>? Guests = null
 );
 
