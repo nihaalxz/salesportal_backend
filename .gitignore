@@ -1,0 +1,19 @@
+## Visual Studio / IDE temporary files
+.vs/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+## Build outputs
+[Bb]in/
+[Oo]bj/
+publish_output/
+publish/
+
+## Rider
+.idea/
+
+## OS generated
+.DS_Store
+Thumbs.db
