@@ -262,6 +262,11 @@ public sealed class InternalOperationsController : ControllerBase
         long? salesmanId = null,
         CancellationToken ct = default)
     {
+        if (!salesmanId.HasValue && long.TryParse(Request.Query["salesmanId"], out var qsId))
+        {
+            salesmanId = qsId;
+        }
+
         if (page < 1 || pageSize is < 1 or > 5000) return BadRequest("Invalid paging parameters.");
         var result = await _readService.GetHeadsAsync(page, pageSize, search, type, salesmanId, ct);
         return Ok(result);
@@ -274,6 +279,11 @@ public sealed class InternalOperationsController : ControllerBase
         long? salesmanId = null,
         CancellationToken ct = default)
     {
+        if (!salesmanId.HasValue && long.TryParse(Request.Query["salesmanId"], out var qsId))
+        {
+            salesmanId = qsId;
+        }
+
         var result = await _readService.GetHeadsSummaryAsync(salesmanId, ct);
         return Ok(result);
     }
@@ -396,6 +406,9 @@ public sealed class InternalOperationsController : ControllerBase
         var safeNarration = string.IsNullOrWhiteSpace(request.Notes) ? "Payment Collection" : request.Notes.Trim();
         var safePaymentMode = (request.PaymentMode ?? "cash").Trim().ToLowerInvariant();
 
+        var env = HttpContext.RequestServices.GetService<Microsoft.AspNetCore.Hosting.IWebHostEnvironment>();
+        var savedProof = await Base64FileHelper.SavePaymentProofAsync(request.PaymentProof, env?.WebRootPath ?? "", ct);
+
         var receipt = new Receipt
         {
             DocumentNumber = docNo,
@@ -411,7 +424,7 @@ public sealed class InternalOperationsController : ControllerBase
             BankId = request.DestinationBankId,
             BankName = request.DestinationName,
             Status = "pending",
-            PaymentProof = request.PaymentProof,
+            PaymentProof = savedProof,
             ExternalReference = request.ExternalReference,
             Source = "accounts_portal",
             CreatedAt = request.ReceiptDate ?? DateTime.UtcNow,

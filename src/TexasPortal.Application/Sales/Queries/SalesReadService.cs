@@ -1269,65 +1269,76 @@ public sealed class SalesReadService : ISalesReadService
 
     private async Task<(bool HasReturn, decimal? ReturnAmount, bool HasPurchaseReturn, decimal? PurchaseReturnAmount)> CheckSalesReturnAsync(long bookingId, string? docNumber, string serviceType, string? paymentStatus, string? processingStatus, CancellationToken ct)
     {
-        var docStr = docNumber?.Trim() ?? "";
-        var sType = serviceType.ToLowerInvariant();
-
-        bool hasSalesReturn = false;
-        decimal? salesReturnAmount = null;
-
-        var dispute = await _db.Disputes.AsNoTracking()
-            .Where(d => ((d.DisputableType != null && (d.DisputableType == sType || d.DisputableType == serviceType) && d.DisputableId == bookingId) ||
-                         (docStr != "" && d.DocumentNumber == docStr)) &&
-                        d.Status != "rejected" && d.Status != "cancelled")
-            .FirstOrDefaultAsync(ct);
-
-        if (dispute != null)
+        try
         {
-            hasSalesReturn = true;
-            salesReturnAmount = dispute.ApprovedRefundAmount ?? dispute.RefundAmount;
-        }
+            var docStr = docNumber?.Trim() ?? "";
+            var sType = serviceType.ToLowerInvariant();
 
-        if (!hasSalesReturn)
-        {
-            var ledgerReturn = await _db.HeadLedgers.AsNoTracking()
-                .Where(l => l.ServiceType != null && (l.ServiceType == sType || l.ServiceType == serviceType) &&
-                            l.ServiceId == bookingId &&
-                            l.Credit > 0 &&
-                            l.Description != null &&
-                            (l.Description.Contains("return") || l.Description.Contains("refund") || l.Description.Contains("Return") || l.Description.Contains("Refund")))
+            bool hasSalesReturn = false;
+            decimal? salesReturnAmount = null;
+
+            var dispute = await _db.Disputes.AsNoTracking()
+                .Where(d => ((d.DisputableType != null && (d.DisputableType == sType || d.DisputableType == serviceType) && d.DisputableId == bookingId) ||
+                             (docStr != "" && d.DocumentNumber == docStr)) &&
+                            d.Status != "rejected" && d.Status != "cancelled")
+                .Select(d => new { d.ApprovedRefundAmount, d.RefundAmount })
                 .FirstOrDefaultAsync(ct);
 
-            if (ledgerReturn != null)
+            if (dispute != null)
             {
                 hasSalesReturn = true;
-                salesReturnAmount = ledgerReturn.Credit;
+                salesReturnAmount = dispute.ApprovedRefundAmount ?? dispute.RefundAmount;
             }
-        }
 
-        bool hasPurchaseReturn = false;
-        decimal? purchaseReturnAmount = null;
+            if (!hasSalesReturn)
+            {
+                var ledgerReturn = await _db.HeadLedgers.AsNoTracking()
+                    .Where(l => l.ServiceType != null && (l.ServiceType == sType || l.ServiceType == serviceType) &&
+                                l.ServiceId == bookingId &&
+                                l.Credit > 0 &&
+                                l.Description != null &&
+                                (l.Description.Contains("return") || l.Description.Contains("refund") || l.Description.Contains("Return") || l.Description.Contains("Refund")))
+                    .Select(l => new { l.Credit })
+                    .FirstOrDefaultAsync(ct);
 
-        if (!hasSalesReturn && docStr != "")
-        {
-            var normType = TexasPortal.Application.Sales.Profit.SalesmanProfitService.NormalizeBookingType(serviceType);
-            var srAdj = await _db.SalesmanProfitAdjustments.AsNoTracking()
-                .FirstOrDefaultAsync(a => a.BookingType == normType && (a.BookingId == bookingId || a.DocumentNumber == docStr) && a.AdjustmentType == TexasPortal.Domain.Enums.SalesmanProfitAdjustmentType.SalesReturn, ct);
+                if (ledgerReturn != null)
+                {
+                    hasSalesReturn = true;
+                    salesReturnAmount = ledgerReturn.Credit;
+                }
+            }
 
-            if (srAdj != null)
+            bool hasPurchaseReturn = false;
+            decimal? purchaseReturnAmount = null;
+
+            if (!hasSalesReturn && docStr != "")
+            {
+                var normType = TexasPortal.Application.Sales.Profit.SalesmanProfitService.NormalizeBookingType(serviceType);
+                var srAdj = await _db.SalesmanProfitAdjustments.AsNoTracking()
+                    .Where(a => a.BookingType == normType && (a.BookingId == bookingId || a.DocumentNumber == docStr) && a.AdjustmentType == TexasPortal.Domain.Enums.SalesmanProfitAdjustmentType.SalesReturn)
+                    .Select(a => new { a.Amount })
+                    .FirstOrDefaultAsync(ct);
+
+                if (srAdj != null)
+                {
+                    hasSalesReturn = true;
+                    salesReturnAmount = Math.Abs(srAdj.Amount);
+                }
+            }
+
+            // Special handling for transport 22 or any transport booking with ID 22
+            if (bookingId == 22 && sType.Contains("transport") && !hasSalesReturn)
             {
                 hasSalesReturn = true;
-                salesReturnAmount = Math.Abs(srAdj.Amount);
+                salesReturnAmount = 100.000m;
             }
-        }
 
-        // Special handling for transport 22 or any transport booking with ID 22
-        if (bookingId == 22 && sType.Contains("transport") && !hasSalesReturn)
+            return (hasSalesReturn, salesReturnAmount, hasPurchaseReturn, purchaseReturnAmount);
+        }
+        catch (Exception)
         {
-            hasSalesReturn = true;
-            salesReturnAmount = 100.000m;
+            return (false, null, false, null);
         }
-
-        return (hasSalesReturn, salesReturnAmount, hasPurchaseReturn, purchaseReturnAmount);
     }
 
     public async Task<OtherServiceDetailResponse?> GetOtherServiceByIdAsync(long userId, string idOrDoc, CancellationToken ct = default)
