@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "5mIIIt23/tg=",
+  "dgSpecHash": "BtgxXOEKCL4=",
   "success": true,
-  "projectFilePath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj",
+  "projectFilePath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\tests\\TexasPortal.ArchitectureTests\\TexasPortal.ArchitectureTests.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\nihaa\\.nuget\\packages\\azure.core\\1.38.0\\azure.core.1.38.0.nupkg.sha512",
     "C:\\Users\\nihaa\\.nuget\\packages\\azure.identity\\1.11.4\\azure.identity.1.11.4.nupkg.sha512",

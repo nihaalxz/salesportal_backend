@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TexasPortal.Contracts")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+264706a6c1ded9892a613de2b99793e80b067efb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+029c5a78bfc238379fd90ed50194d73c60775f47")]
 [assembly: System.Reflection.AssemblyProductAttribute("TexasPortal.Contracts")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TexasPortal.Contracts")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -1,8 +1,8 @@
 {
   "version": 2,
-  "dgSpecHash": "pnT+1TzH0tI=",
+  "dgSpecHash": "qpcpNBwOVN8=",
   "success": true,
-  "projectFilePath": "d:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj",
+  "projectFilePath": "D:\\freelanceprojects\\TexasPortalsDotNet\\texas_sales_portal_backend\\texas_sales_portal_backend\\src\\TexasPortal.Application\\TexasPortal.Application.csproj",
   "expectedPackageFiles": [
     "C:\\Users\\nihaa\\.nuget\\packages\\bcrypt.net-next\\4.0.3\\bcrypt.net-next.4.0.3.nupkg.sha512",
     "C:\\Users\\nihaa\\.nuget\\packages\\bouncycastle.cryptography\\2.6.2\\bouncycastle.cryptography.2.6.2.nupkg.sha512",

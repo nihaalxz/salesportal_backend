@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TexasPortal.UnitTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+264706a6c1ded9892a613de2b99793e80b067efb")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+73a857fb3b2d3981ae28d0b3d64c10288a90816e")]
 [assembly: System.Reflection.AssemblyProductAttribute("TexasPortal.UnitTests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TexasPortal.UnitTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

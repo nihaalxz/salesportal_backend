@@ -77,6 +77,7 @@ public sealed class InternalOperationsController : ControllerBase
 
     // â”€â”€â”€ VFS Appointments â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [HttpGet("vfs-appointments")]
+    [HttpGet("vfs")]
     [ProducesResponseType(typeof(PagedResponse<VfsAppointmentSummaryResponse>), 200)]
     [ProducesResponseType(401)]
     public async Task<IActionResult> GetVfsAppointments(
@@ -92,6 +93,8 @@ public sealed class InternalOperationsController : ControllerBase
     }
 
     [HttpGet("vfs-appointments/{id:long}")]
+    [HttpGet("vfs/{id:long}")]
+    [HttpGet("vfs-appointment/{id:long}")]
     [ProducesResponseType(typeof(VfsAppointmentDetailResponse), 200)]
     [ProducesResponseType(401), ProducesResponseType(404)]
     public async Task<IActionResult> GetVfsAppointmentDetails([FromRoute] long id, CancellationToken ct)
@@ -204,6 +207,8 @@ public sealed class InternalOperationsController : ControllerBase
 
     // â”€â”€â”€ Transportations â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     [HttpGet("transportations")]
+    [HttpGet("transportation")]
+    [HttpGet("transport")]
     [ProducesResponseType(typeof(PagedResponse<TransportationSummaryResponse>), 200)]
     [ProducesResponseType(401)]
     public async Task<IActionResult> GetTransportations(
@@ -218,6 +223,8 @@ public sealed class InternalOperationsController : ControllerBase
     }
 
     [HttpGet("transportations/{id:long}")]
+    [HttpGet("transportation/{id:long}")]
+    [HttpGet("transport/{id:long}")]
     [ProducesResponseType(typeof(TransportationDetailResponse), 200)]
     [ProducesResponseType(401), ProducesResponseType(404)]
     public async Task<IActionResult> GetTransportationDetails([FromRoute] long id, CancellationToken ct)
