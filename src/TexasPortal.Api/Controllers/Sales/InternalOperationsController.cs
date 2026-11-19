@@ -542,7 +542,7 @@ public sealed class InternalOperationsController : ControllerBase
         return Ok(records);
     }
 
-    public record UpdateStatusRequest(string Status, decimal? Cost, string? PaymentReference = null);
+    public record UpdateStatusRequest(string Status, decimal? Cost, string? PaymentReference = null, string? BankName = null);
 
     public record SyncActualCostRequest(
         string? Service_Type,
@@ -766,10 +766,14 @@ public sealed class InternalOperationsController : ControllerBase
         {
             receipt.PaymentReference = request.PaymentReference.Trim();
         }
+        if (!string.IsNullOrWhiteSpace(request.BankName))
+        {
+            receipt.BankName = request.BankName.Trim();
+        }
 
         if (string.Equals(oldStatus, request.Status, StringComparison.OrdinalIgnoreCase))
         {
-            if (!string.IsNullOrWhiteSpace(request.PaymentReference))
+            if (!string.IsNullOrWhiteSpace(request.PaymentReference) || !string.IsNullOrWhiteSpace(request.BankName))
             {
                 await _db.SaveChangesAsync(ct);
             }
@@ -791,9 +795,16 @@ public sealed class InternalOperationsController : ControllerBase
                 return StatusCode(approvalResult.StatusCode, new { Message = approvalResult.Message });
             }
 
-            if (!string.IsNullOrWhiteSpace(request.PaymentReference))
+            if (!string.IsNullOrWhiteSpace(request.PaymentReference) || !string.IsNullOrWhiteSpace(request.BankName))
             {
-                receipt.PaymentReference = request.PaymentReference.Trim();
+                if (!string.IsNullOrWhiteSpace(request.PaymentReference))
+                {
+                    receipt.PaymentReference = request.PaymentReference.Trim();
+                }
+                if (!string.IsNullOrWhiteSpace(request.BankName))
+                {
+                    receipt.BankName = request.BankName.Trim();
+                }
                 await _db.SaveChangesAsync(ct);
             }
 
