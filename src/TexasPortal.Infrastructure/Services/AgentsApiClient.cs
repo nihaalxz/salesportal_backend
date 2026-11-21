@@ -294,10 +294,20 @@ public sealed class AgentsApiClient : IAgentsApiClient
         List<GovtFeeSyncItem> fees,
         CancellationToken ct = default)
     {
+        await SyncGovtSupplierPaymentsWithDetailsAsync(externalReference, serviceType, createdByUserId, fees, ct);
+    }
+
+    public async Task<List<GovtFeeSyncResultItem>> SyncGovtSupplierPaymentsWithDetailsAsync(
+        string externalReference,
+        string serviceType,
+        long? createdByUserId,
+        List<GovtFeeSyncItem> fees,
+        CancellationToken ct = default)
+    {
         try
         {
             using var client = _httpClientFactory.CreateClient();
-            client.Timeout = TimeSpan.FromSeconds(5);
+            client.Timeout = TimeSpan.FromSeconds(30);
             client.DefaultRequestHeaders.Add("X-OPS-KEY", ApiKey);
 
             var body = new
@@ -318,12 +328,39 @@ public sealed class AgentsApiClient : IAgentsApiClient
 
             var response = await client.PostAsJsonAsync($"{BaseUrl}/api/public/supplier-payments/sync-govt-payments", body, ct);
             response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<SyncGovtPaymentsApiResponse>(cancellationToken: ct);
+            if (result?.Payments != null)
+            {
+                return result.Payments.Select(p => new GovtFeeSyncResultItem(
+                    p.PaymentId,
+                    p.RowKey,
+                    p.Amount,
+                    p.Status,
+                    p.DocumentNumber
+                )).ToList();
+            }
         }
         catch
         {
             // Silently fallback if accounts portal API is unreachable, ensuring operations submission succeeds
         }
+
+        return new List<GovtFeeSyncResultItem>();
     }
+
+    private sealed record SyncGovtPaymentsApiResponse(
+        bool Success,
+        List<SyncGovtPaymentItemApiResponse>? Payments
+    );
+
+    private sealed record SyncGovtPaymentItemApiResponse(
+        long PaymentId,
+        string? RowKey,
+        decimal Amount,
+        string? Status,
+        string? DocumentNumber
+    );
 
     public async Task<BookingSupplierPaymentSummary?> GetBookingSupplierPaymentsAsync(string serviceType, string externalReference, CancellationToken ct = default)
     {

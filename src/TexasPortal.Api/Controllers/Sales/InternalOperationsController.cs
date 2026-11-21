@@ -1096,7 +1096,19 @@ public sealed class InternalOperationsController : ControllerBase
         if (agentsApiClient != null)
         {
             var syncFees = currentFees.Select(f => new TexasPortal.Application.Sales.Queries.GovtFeeSyncItem(f.Amount, f.SupplierId, f.SupplierName, f.PaymentReference, f.Description, f.RowKey)).ToList();
-            await agentsApiClient.SyncGovtSupplierPaymentsAsync(booking.Id.ToString(), "Visa", request.ProcessedBy, syncFees, ct);
+            var syncResults = await agentsApiClient.SyncGovtSupplierPaymentsWithDetailsAsync(booking.Id.ToString(), "Visa", request.ProcessedBy, syncFees, ct);
+            if (syncResults.Count > 0)
+            {
+                foreach (var res in syncResults)
+                {
+                    if (string.IsNullOrWhiteSpace(res.RowKey)) continue;
+                    var matchedFee = currentFees.FirstOrDefault(f => f.RowKey == res.RowKey);
+                    if (matchedFee != null && matchedFee.AccountsPaymentId == null)
+                    {
+                        matchedFee.AccountsPaymentId = res.PaymentId;
+                    }
+                }
+            }
         }
 
         await _db.SaveChangesAsync(ct);
@@ -1436,7 +1448,19 @@ public sealed class InternalOperationsController : ControllerBase
         if (agentsApiClient != null)
         {
             var syncFees = currentVfsFees.Select(f => new TexasPortal.Application.Sales.Queries.GovtFeeSyncItem(f.Amount, f.SupplierId, f.SupplierName, f.PaymentReference, "VFS Appointment Fee", f.RowKey)).ToList();
-            await agentsApiClient.SyncGovtSupplierPaymentsAsync(booking.Id.ToString(), "VFS", booking.CreatedBy, syncFees, ct);
+            var syncResults = await agentsApiClient.SyncGovtSupplierPaymentsWithDetailsAsync(booking.Id.ToString(), "VFS", booking.CreatedBy, syncFees, ct);
+            if (syncResults.Count > 0)
+            {
+                foreach (var res in syncResults)
+                {
+                    if (string.IsNullOrWhiteSpace(res.RowKey)) continue;
+                    var matchedFee = currentVfsFees.FirstOrDefault(f => f.RowKey == res.RowKey);
+                    if (matchedFee != null && matchedFee.AccountsPaymentId == null)
+                    {
+                        matchedFee.AccountsPaymentId = res.PaymentId;
+                    }
+                }
+            }
         }
 
         booking.ExpectedSupplierCost = currentVfsFees.Sum(f => f.Amount);

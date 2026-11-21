@@ -17,6 +17,14 @@ public record GovtFeeSyncItem(
     string? RowKey = null
 );
 
+public record GovtFeeSyncResultItem(
+    long PaymentId,
+    string? RowKey,
+    decimal Amount,
+    string? Status,
+    string? DocumentNumber
+);
+
 public interface IAgentsApiClient
 {
     Task<List<HeadLookupResponse>> GetAgentsAsync(long salesmanId, string? search, int limit, CancellationToken ct);
@@ -30,6 +38,7 @@ public interface IAgentsApiClient
     Task<PagedResponse<HeadLedgerEntryResponse>> GetAgentLedgerAsync(long agentId, int page, int pageSize, CancellationToken ct);
     Task CreateGovtSupplierPaymentAsync(long supplierId, decimal amount, string? referenceNumber, string? externalReference, string? serviceType, string? description, long? createdByUserId = null, CancellationToken ct = default);
     Task SyncGovtSupplierPaymentsAsync(string externalReference, string serviceType, long? createdByUserId, List<GovtFeeSyncItem> fees, CancellationToken ct = default);
+    Task<List<GovtFeeSyncResultItem>> SyncGovtSupplierPaymentsWithDetailsAsync(string externalReference, string serviceType, long? createdByUserId, List<GovtFeeSyncItem> fees, CancellationToken ct = default) => Task.FromResult(new List<GovtFeeSyncResultItem>());
     Task<(bool HasReturn, decimal? ReturnAmount, bool HasPurchaseReturn, decimal? PurchaseReturnAmount)> CheckSalesReturnAsync(string serviceType, string serviceId, CancellationToken ct = default);
     Task<BookingSupplierPaymentSummary?> GetBookingSupplierPaymentsAsync(string serviceType, string externalReference, CancellationToken ct = default);
     Task<string?> GetBookingApproverAsync(string serviceType, string bookingId, string? docNumber = null, CancellationToken ct = default);

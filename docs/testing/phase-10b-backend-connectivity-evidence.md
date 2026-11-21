@@ -2,7 +2,7 @@
 
 This document provides verified evidence of the complete SvelteKit-to-Database read path execution, compiled dynamically during integration testing against the SQL Server database.
 
-**Generated**: 2026-08-05 12:35:25 UTC
+**Generated**: 2026-11-21 19:54:20 UTC
 
 ## Database Diagnostic State
 
@@ -45,7 +45,7 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
   "totalPayableAmount": 350.750,
   "totalPaidAmount": 0,
   "totalPendingAmount": 0,
-  "totalProfit": 25.000,
+  "totalProfit": 0.000,
   "cashInHand": 350.250,
   "activeLeads": 1,
   "totalHeads": 1,
@@ -76,7 +76,7 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
   "totalPayableAmount": 480.000,
   "totalPaidAmount": 0,
   "totalPendingAmount": 0,
-  "totalProfit": 80.000,
+  "totalProfit": 0.000,
   "cashInHand": 120.500,
   "activeLeads": 1,
   "totalHeads": 1,
@@ -108,48 +108,15 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
       "type": "customer",
       "status": "active",
       "wallet": 200.000,
-      "createdAt": null
-    },
-    {
-      "id": 1,
-      "firstName": "kader",
-      "lastName": "agent",
-      "email": "zakirhussain@gmail.com",
-      "mobileNo": "\u002B917034183646",
-      "nationality": "Bahraini",
-      "type": "agent",
-      "status": "active",
-      "wallet": 75.000,
-      "createdAt": null
-    },
-    {
-      "id": 6,
-      "firstName": "fazilkagent",
-      "lastName": "agent",
-      "email": "zakeirhussain@gmail.com",
-      "mobileNo": "\u002B917034183646",
-      "nationality": "Bahraini",
-      "type": "agent",
-      "status": "active",
-      "wallet": -60.000,
-      "createdAt": null
-    },
-    {
-      "id": 4,
-      "firstName": "alo",
-      "lastName": "df",
-      "email": "zakir22hussain@gmail.com",
-      "mobileNo": "\u002B917034188",
-      "nationality": "Bahraini",
-      "type": "agent",
-      "status": "active",
-      "wallet": 60.897,
+      "address": null,
+      "salesmanId": null,
+      "salesmanName": null,
       "createdAt": null
     }
   ],
   "page": 1,
   "pageSize": 10,
-  "totalCount": 4,
+  "totalCount": 1,
   "totalPages": 1,
   "hasNextPage": false,
   "hasPreviousPage": false
@@ -177,12 +144,30 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
       "type": "customer",
       "status": "active",
       "wallet": 50.000,
+      "address": null,
+      "salesmanId": null,
+      "salesmanName": null,
+      "createdAt": null
+    },
+    {
+      "id": 1,
+      "firstName": "Muhammed",
+      "lastName": "Kt",
+      "email": "zakirhussain@gmail.com",
+      "mobileNo": "\u002B91 7034183646",
+      "nationality": "Bahraini",
+      "type": "agent",
+      "status": "active",
+      "wallet": 164.000,
+      "address": null,
+      "salesmanId": null,
+      "salesmanName": null,
       "createdAt": null
     }
   ],
   "page": 1,
   "pageSize": 10,
-  "totalCount": 1,
+  "totalCount": 2,
   "totalPages": 1,
   "hasNextPage": false,
   "hasPreviousPage": false
@@ -209,6 +194,8 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
   "type": "customer",
   "status": "active",
   "wallet": 200.000,
+  "salesmanId": null,
+  "salesmanName": null,
   "createdAt": null
 }
 ```
@@ -233,6 +220,8 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
   "type": "customer",
   "status": "active",
   "wallet": 50.000,
+  "salesmanId": null,
+  "salesmanName": null,
   "createdAt": null
 }
 ```
@@ -243,14 +232,23 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
 
 - **Route**: `/api/sales/heads/1`
 - **Auth Identity**: `dev-token-salesman-b`
-- **HTTP Status**: `404 NotFound`
+- **HTTP Status**: `200 OK`
 - **JSON Response Payload**:
 ```json
 {
-  "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
-  "title": "Not Found",
-  "status": 404,
-  "traceId": "00-0c36b2604ee781a522c4ec549120877d-861029fc91c4c562-00"
+  "address": "N/A",
+  "id": 1,
+  "firstName": "Muhammed",
+  "lastName": "Kt",
+  "email": "zakirhussain@gmail.com",
+  "mobileNo": "\u002B91 7034183646",
+  "nationality": "Bahraini",
+  "type": "agent",
+  "status": "active",
+  "wallet": 164.000,
+  "salesmanId": null,
+  "salesmanName": null,
+  "createdAt": "2026-11-21T19:54:22.1371907Z"
 }
 ```
 
@@ -267,7 +265,7 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
   "type": "https://tools.ietf.org/html/rfc9110#section-15.5.5",
   "title": "Not Found",
   "status": 404,
-  "traceId": "00-d91590298a269f84472b998a6ac192db-529c45d9ab88bd95-00"
+  "traceId": "00-61868809863341725af1201c0a360897-f2341156169eab03-00"
 }
 ```
 
@@ -283,27 +281,42 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
 {
   "items": [
     {
+      "id": 1,
+      "serviceId": 1,
+      "type": "Flight",
+      "description": "Flight Ticket Booking TX-FL-90210",
+      "debit": 250.750,
+      "credit": 0,
+      "balance": -250.750,
+      "paymentMethod": "cash",
+      "createdAt": "2026-11-16T19:54:20.6031733"
+    },
+    {
       "id": 2,
+      "serviceId": 1,
       "type": "Receipt",
       "description": "Deposit payment for flights",
       "debit": 0.000,
       "credit": 100.000,
       "balance": 100.000,
-      "createdAt": "2026-08-01T12:35:25.1386418"
+      "paymentMethod": null,
+      "createdAt": "2026-11-17T19:54:20.6205867"
     },
     {
       "id": 1,
-      "type": "Flight",
-      "description": "Flight Ticket Booking TX-FL-90210",
-      "debit": 250.750,
-      "credit": 0.000,
-      "balance": -250.750,
-      "createdAt": "2026-07-31T12:35:25.1380059"
+      "serviceId": 1,
+      "type": "hotel_booking",
+      "description": "Hotel Booking #1: Alice (UAE)",
+      "debit": 100.000,
+      "credit": 0,
+      "balance": -100.000,
+      "paymentMethod": "cash",
+      "createdAt": "2026-11-20T19:54:20.6673454"
     }
   ],
   "page": 1,
   "pageSize": 20,
-  "totalCount": 2,
+  "totalCount": 3,
   "totalPages": 1,
   "hasNextPage": false,
   "hasPreviousPage": false
@@ -323,17 +336,30 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
   "items": [
     {
       "id": 3,
+      "serviceId": 1,
       "type": "Hotel",
       "description": "Hotel Booking TX-HT-44810",
       "debit": 480.000,
-      "credit": 0.000,
+      "credit": 0,
       "balance": -480.000,
-      "createdAt": "2026-08-02T12:35:25.1386724"
+      "paymentMethod": null,
+      "createdAt": "2026-11-18T19:54:20.6207766"
+    },
+    {
+      "id": 2,
+      "serviceId": 2,
+      "type": "hotel_booking",
+      "description": "Hotel Booking #2: Bob (Bahrain)",
+      "debit": 480.000,
+      "credit": 0,
+      "balance": -480.000,
+      "paymentMethod": "bank",
+      "createdAt": "2026-11-20T19:54:20.7108966"
     }
   ],
   "page": 1,
   "pageSize": 20,
-  "totalCount": 1,
+  "totalCount": 2,
   "totalPages": 1,
   "hasNextPage": false,
   "hasPreviousPage": false
@@ -350,11 +376,45 @@ This document provides verified evidence of the complete SvelteKit-to-Database r
 - **JSON Response Payload**:
 ```json
 {
-  "items": [],
+  "items": [
+    {
+      "id": 1,
+      "serviceId": 1,
+      "type": "Flight",
+      "description": "Flight Ticket Booking TX-FL-90210",
+      "debit": 250.750,
+      "credit": 0,
+      "balance": -250.750,
+      "paymentMethod": "cash",
+      "createdAt": "2026-11-16T19:54:20.6031733"
+    },
+    {
+      "id": 2,
+      "serviceId": 1,
+      "type": "Receipt",
+      "description": "Deposit payment for flights",
+      "debit": 0.000,
+      "credit": 100.000,
+      "balance": 100.000,
+      "paymentMethod": null,
+      "createdAt": "2026-11-17T19:54:20.6205867"
+    },
+    {
+      "id": 1,
+      "serviceId": 1,
+      "type": "hotel_booking",
+      "description": "Hotel Booking #1: Alice (UAE)",
+      "debit": 100.000,
+      "credit": 0,
+      "balance": -100.000,
+      "paymentMethod": "cash",
+      "createdAt": "2026-11-20T19:54:20.6673454"
+    }
+  ],
   "page": 1,
   "pageSize": 20,
-  "totalCount": 0,
-  "totalPages": 0,
+  "totalCount": 3,
+  "totalPages": 1,
   "hasNextPage": false,
   "hasPreviousPage": false
 }

@@ -158,6 +158,9 @@ builder.Services.AddAuthorization(options =>
 // Register Lead Reminder background worker service
 builder.Services.AddHostedService<TexasPortal.Api.Services.LeadReminderBackgroundService>();
 
+// Register Govt Fee Sync & Auto-Heal background worker service
+builder.Services.AddHostedService<TexasPortal.Api.Services.GovtFeeSyncBackgroundService>();
+
 // Initialize SMTP Settings in NotificationHelper
 TexasPortal.Application.Sales.Notifications.NotificationHelper.SmtpServer = builder.Configuration["Smtp:Server"] ?? "sales.texastravels.bh";
 TexasPortal.Application.Sales.Notifications.NotificationHelper.SmtpPort = int.TryParse(builder.Configuration["Smtp:Port"], out var port) ? port : 465;
