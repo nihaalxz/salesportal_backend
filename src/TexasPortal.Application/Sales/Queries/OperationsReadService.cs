@@ -756,8 +756,66 @@ public sealed class OperationsReadService : IOperationsReadService
         if (startDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt >= startDate.Value);
         if (endDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt <= endDate.Value);
         var finalProfitRecords = await profitQuery
-            .Select(x => new { x.SalesmanId, x.BookingType, x.ProfitAmount })
+            .Select(x => new { x.SalesmanId, x.BookingType, x.BookingId, x.DocumentNumber, x.ProfitAmount })
             .ToListAsync(ct);
+
+        var profitById = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        var profitByDoc = new Dictionary<string, decimal>(StringComparer.OrdinalIgnoreCase);
+        foreach (var r in finalProfitRecords)
+        {
+            if (r.BookingId > 0)
+                profitById[$"{r.BookingType}:{r.BookingId}"] = r.ProfitAmount;
+            if (!string.IsNullOrWhiteSpace(r.DocumentNumber))
+                profitByDoc[$"{r.BookingType}:{r.DocumentNumber.Trim()}"] = r.ProfitAmount;
+        }
+
+        static decimal ComputeServiceFinalProfit(
+            string serviceType,
+            List<BookingFinancialAggregate> items,
+            Dictionary<string, decimal> pById,
+            Dictionary<string, decimal> pByDoc,
+            IEnumerable<(string BookingType, long BookingId, string? DocumentNumber, decimal ProfitAmount)> sFinalRecords)
+        {
+            decimal finalProfit = 0m;
+            var matchedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+            foreach (var item in items)
+            {
+                var idKey = $"{item.ServiceType}:{item.BookingId}";
+                var docKey = !string.IsNullOrWhiteSpace(item.DocumentNumber) ? $"{item.ServiceType}:{item.DocumentNumber.Trim()}" : null;
+
+                if (pById.TryGetValue(idKey, out var valById))
+                {
+                    finalProfit += valById;
+                    matchedKeys.Add(idKey);
+                    if (docKey != null) matchedKeys.Add(docKey);
+                }
+                else if (docKey != null && pByDoc.TryGetValue(docKey, out var valByDoc))
+                {
+                    finalProfit += valByDoc;
+                    matchedKeys.Add(idKey);
+                    matchedKeys.Add(docKey);
+                }
+                else if (item.IsDealClosed)
+                {
+                    finalProfit += item.ExpectedProfit;
+                }
+            }
+
+            foreach (var r in sFinalRecords.Where(x => string.Equals(x.BookingType, serviceType, StringComparison.OrdinalIgnoreCase)))
+            {
+                var idKey = $"{r.BookingType}:{r.BookingId}";
+                var docKey = !string.IsNullOrWhiteSpace(r.DocumentNumber) ? $"{r.BookingType}:{r.DocumentNumber.Trim()}" : null;
+
+                bool alreadyCounted = matchedKeys.Contains(idKey) || (docKey != null && matchedKeys.Contains(docKey));
+                if (!alreadyCounted)
+                {
+                    finalProfit += r.ProfitAmount;
+                }
+            }
+
+            return finalProfit;
+        }
 
         var report = new List<SalesmanReportResponse>();
 
@@ -779,8 +837,17 @@ public sealed class OperationsReadService : IOperationsReadService
             var totalSalesValue = sBookings.Sum(x => x.PayableAmount);
             var totalExpectedProfit = sBookings.Sum(x => x.ExpectedProfit);
 
-            var sFinalProfits = finalProfitRecords.Where(x => x.SalesmanId == sid).ToList();
-            var totalFinalProfit = sFinalProfits.Sum(x => x.ProfitAmount);
+            var sFinalRecords = finalProfitRecords.Where(x => x.SalesmanId == sid).Select(x => (x.BookingType, x.BookingId, x.DocumentNumber, x.ProfitAmount)).ToList();
+
+            var flightFinalProfit = ComputeServiceFinalProfit("Flight", flightItems, profitById, profitByDoc, sFinalRecords);
+            var hotelFinalProfit = ComputeServiceFinalProfit("Hotel", hotelItems, profitById, profitByDoc, sFinalRecords);
+            var visaFinalProfit = ComputeServiceFinalProfit("Visa", visaItems, profitById, profitByDoc, sFinalRecords);
+            var vfsFinalProfit = ComputeServiceFinalProfit("VFS", vfsItems, profitById, profitByDoc, sFinalRecords);
+            var holidayFinalProfit = ComputeServiceFinalProfit("Holiday", holidayItems, profitById, profitByDoc, sFinalRecords);
+            var transportFinalProfit = ComputeServiceFinalProfit("Transport", transportItems, profitById, profitByDoc, sFinalRecords);
+            var otherFinalProfit = ComputeServiceFinalProfit("Other", otherItems, profitById, profitByDoc, sFinalRecords);
+
+            var totalFinalProfit = flightFinalProfit + hotelFinalProfit + visaFinalProfit + vfsFinalProfit + holidayFinalProfit + transportFinalProfit + otherFinalProfit;
 
             var customerCredit = customerNegativeBalances.GetValueOrDefault(sid, 0m);
             var agentCredit = agentNegativeBalances.GetValueOrDefault(sid, 0m);
@@ -800,38 +867,57 @@ public sealed class OperationsReadService : IOperationsReadService
                 FlightCount = flightItems.Count,
                 FlightSales = flightItems.Sum(x => x.PayableAmount),
                 FlightProfit = flightItems.Sum(x => x.ExpectedProfit),
-                FlightFinalProfit = sFinalProfits.Where(x => x.BookingType == "Flight").Sum(x => x.ProfitAmount),
+                FlightFinalProfit = flightFinalProfit,
                 HotelCount = hotelItems.Count,
                 HotelSales = hotelItems.Sum(x => x.PayableAmount),
                 HotelProfit = hotelItems.Sum(x => x.ExpectedProfit),
-                HotelFinalProfit = sFinalProfits.Where(x => x.BookingType == "Hotel").Sum(x => x.ProfitAmount),
+                HotelFinalProfit = hotelFinalProfit,
                 VisaCount = visaItems.Count,
                 VisaSales = visaItems.Sum(x => x.PayableAmount),
                 VisaProfit = visaItems.Sum(x => x.ExpectedProfit),
-                VisaFinalProfit = sFinalProfits.Where(x => x.BookingType == "Visa").Sum(x => x.ProfitAmount),
+                VisaFinalProfit = visaFinalProfit,
                 VfsCount = vfsItems.Count,
                 VfsSales = vfsItems.Sum(x => x.PayableAmount),
                 VfsProfit = vfsItems.Sum(x => x.ExpectedProfit),
-                VfsFinalProfit = sFinalProfits.Where(x => x.BookingType == "VFS").Sum(x => x.ProfitAmount),
+                VfsFinalProfit = vfsFinalProfit,
                 HolidayCount = holidayItems.Count,
                 HolidaySales = holidayItems.Sum(x => x.PayableAmount),
                 HolidayProfit = holidayItems.Sum(x => x.ExpectedProfit),
-                HolidayFinalProfit = sFinalProfits.Where(x => x.BookingType == "Holiday").Sum(x => x.ProfitAmount),
+                HolidayFinalProfit = holidayFinalProfit,
                 TransportCount = transportItems.Count,
                 TransportSales = transportItems.Sum(x => x.PayableAmount),
                 TransportProfit = transportItems.Sum(x => x.ExpectedProfit),
-                TransportFinalProfit = sFinalProfits.Where(x => x.BookingType == "Transport").Sum(x => x.ProfitAmount),
+                TransportFinalProfit = transportFinalProfit,
                 OtherCount = otherItems.Count,
                 OtherSales = otherItems.Sum(x => x.PayableAmount),
                 OtherProfit = otherItems.Sum(x => x.ExpectedProfit),
-                OtherFinalProfit = sFinalProfits.Where(x => x.BookingType == "Other").Sum(x => x.ProfitAmount)
+                OtherFinalProfit = otherFinalProfit
             });
         }
 
         // Include Unassigned row if any bookings are not matched to active salesmen
         if (bookingsBySalesman.TryGetValue(0, out var unassignedBookings) && unassignedBookings.Count > 0)
         {
-            var uFinalProfits = finalProfitRecords.Where(x => x.SalesmanId == 0).ToList();
+            var uFinalRecords = finalProfitRecords.Where(x => x.SalesmanId == 0).Select(x => (x.BookingType, x.BookingId, x.DocumentNumber, x.ProfitAmount)).ToList();
+
+            var uFlightItems = unassignedBookings.Where(x => x.ServiceType == "Flight").ToList();
+            var uHotelItems = unassignedBookings.Where(x => x.ServiceType == "Hotel").ToList();
+            var uVisaItems = unassignedBookings.Where(x => x.ServiceType == "Visa").ToList();
+            var uVfsItems = unassignedBookings.Where(x => x.ServiceType == "VFS").ToList();
+            var uHolidayItems = unassignedBookings.Where(x => x.ServiceType == "Holiday").ToList();
+            var uTransportItems = unassignedBookings.Where(x => x.ServiceType == "Transport").ToList();
+            var uOtherItems = unassignedBookings.Where(x => x.ServiceType == "Other").ToList();
+
+            var uFlightFinalProfit = ComputeServiceFinalProfit("Flight", uFlightItems, profitById, profitByDoc, uFinalRecords);
+            var uHotelFinalProfit = ComputeServiceFinalProfit("Hotel", uHotelItems, profitById, profitByDoc, uFinalRecords);
+            var uVisaFinalProfit = ComputeServiceFinalProfit("Visa", uVisaItems, profitById, profitByDoc, uFinalRecords);
+            var uVfsFinalProfit = ComputeServiceFinalProfit("VFS", uVfsItems, profitById, profitByDoc, uFinalRecords);
+            var uHolidayFinalProfit = ComputeServiceFinalProfit("Holiday", uHolidayItems, profitById, profitByDoc, uFinalRecords);
+            var uTransportFinalProfit = ComputeServiceFinalProfit("Transport", uTransportItems, profitById, profitByDoc, uFinalRecords);
+            var uOtherFinalProfit = ComputeServiceFinalProfit("Other", uOtherItems, profitById, profitByDoc, uFinalRecords);
+
+            var uTotalFinalProfit = uFlightFinalProfit + uHotelFinalProfit + uVisaFinalProfit + uVfsFinalProfit + uHolidayFinalProfit + uTransportFinalProfit + uOtherFinalProfit;
+
             report.Add(new SalesmanReportResponse
             {
                 Id = 0,
@@ -841,36 +927,36 @@ public sealed class OperationsReadService : IOperationsReadService
                 BookingsCount = unassignedBookings.Count,
                 TotalSalesValue = unassignedBookings.Sum(x => x.PayableAmount),
                 TotalProfit = unassignedBookings.Sum(x => x.ExpectedProfit),
-                TotalFinalProfit = uFinalProfits.Sum(x => x.ProfitAmount),
+                TotalFinalProfit = uTotalFinalProfit,
                 CreditToCollect = 0m,
-                FlightCount = unassignedBookings.Count(x => x.ServiceType == "Flight"),
-                FlightSales = unassignedBookings.Where(x => x.ServiceType == "Flight").Sum(x => x.PayableAmount),
-                FlightProfit = unassignedBookings.Where(x => x.ServiceType == "Flight").Sum(x => x.ExpectedProfit),
-                FlightFinalProfit = uFinalProfits.Where(x => x.BookingType == "Flight").Sum(x => x.ProfitAmount),
-                HotelCount = unassignedBookings.Count(x => x.ServiceType == "Hotel"),
-                HotelSales = unassignedBookings.Where(x => x.ServiceType == "Hotel").Sum(x => x.PayableAmount),
-                HotelProfit = unassignedBookings.Where(x => x.ServiceType == "Hotel").Sum(x => x.ExpectedProfit),
-                HotelFinalProfit = uFinalProfits.Where(x => x.BookingType == "Hotel").Sum(x => x.ProfitAmount),
-                VisaCount = unassignedBookings.Count(x => x.ServiceType == "Visa"),
-                VisaSales = unassignedBookings.Where(x => x.ServiceType == "Visa").Sum(x => x.PayableAmount),
-                VisaProfit = unassignedBookings.Where(x => x.ServiceType == "Visa").Sum(x => x.ExpectedProfit),
-                VisaFinalProfit = uFinalProfits.Where(x => x.BookingType == "Visa").Sum(x => x.ProfitAmount),
-                VfsCount = unassignedBookings.Count(x => x.ServiceType == "VFS"),
-                VfsSales = unassignedBookings.Where(x => x.ServiceType == "VFS").Sum(x => x.PayableAmount),
-                VfsProfit = unassignedBookings.Where(x => x.ServiceType == "VFS").Sum(x => x.ExpectedProfit),
-                VfsFinalProfit = uFinalProfits.Where(x => x.BookingType == "VFS").Sum(x => x.ProfitAmount),
-                HolidayCount = unassignedBookings.Count(x => x.ServiceType == "Holiday"),
-                HolidaySales = unassignedBookings.Where(x => x.ServiceType == "Holiday").Sum(x => x.PayableAmount),
-                HolidayProfit = unassignedBookings.Where(x => x.ServiceType == "Holiday").Sum(x => x.ExpectedProfit),
-                HolidayFinalProfit = uFinalProfits.Where(x => x.BookingType == "Holiday").Sum(x => x.ProfitAmount),
-                TransportCount = unassignedBookings.Count(x => x.ServiceType == "Transport"),
-                TransportSales = unassignedBookings.Where(x => x.ServiceType == "Transport").Sum(x => x.PayableAmount),
-                TransportProfit = unassignedBookings.Where(x => x.ServiceType == "Transport").Sum(x => x.ExpectedProfit),
-                TransportFinalProfit = uFinalProfits.Where(x => x.BookingType == "Transport").Sum(x => x.ProfitAmount),
-                OtherCount = unassignedBookings.Count(x => x.ServiceType == "Other"),
-                OtherSales = unassignedBookings.Where(x => x.ServiceType == "Other").Sum(x => x.PayableAmount),
-                OtherProfit = unassignedBookings.Where(x => x.ServiceType == "Other").Sum(x => x.ExpectedProfit),
-                OtherFinalProfit = uFinalProfits.Where(x => x.BookingType == "Other").Sum(x => x.ProfitAmount)
+                FlightCount = uFlightItems.Count,
+                FlightSales = uFlightItems.Sum(x => x.PayableAmount),
+                FlightProfit = uFlightItems.Sum(x => x.ExpectedProfit),
+                FlightFinalProfit = uFlightFinalProfit,
+                HotelCount = uHotelItems.Count,
+                HotelSales = uHotelItems.Sum(x => x.PayableAmount),
+                HotelProfit = uHotelItems.Sum(x => x.ExpectedProfit),
+                HotelFinalProfit = uHotelFinalProfit,
+                VisaCount = uVisaItems.Count,
+                VisaSales = uVisaItems.Sum(x => x.PayableAmount),
+                VisaProfit = uVisaItems.Sum(x => x.ExpectedProfit),
+                VisaFinalProfit = uVisaFinalProfit,
+                VfsCount = uVfsItems.Count,
+                VfsSales = uVfsItems.Sum(x => x.PayableAmount),
+                VfsProfit = uVfsItems.Sum(x => x.ExpectedProfit),
+                VfsFinalProfit = uVfsFinalProfit,
+                HolidayCount = uHolidayItems.Count,
+                HolidaySales = uHolidayItems.Sum(x => x.PayableAmount),
+                HolidayProfit = uHolidayItems.Sum(x => x.ExpectedProfit),
+                HolidayFinalProfit = uHolidayFinalProfit,
+                TransportCount = uTransportItems.Count,
+                TransportSales = uTransportItems.Sum(x => x.PayableAmount),
+                TransportProfit = uTransportItems.Sum(x => x.ExpectedProfit),
+                TransportFinalProfit = uTransportFinalProfit,
+                OtherCount = uOtherItems.Count,
+                OtherSales = uOtherItems.Sum(x => x.PayableAmount),
+                OtherProfit = uOtherItems.Sum(x => x.ExpectedProfit),
+                OtherFinalProfit = uOtherFinalProfit
             });
         }
 
