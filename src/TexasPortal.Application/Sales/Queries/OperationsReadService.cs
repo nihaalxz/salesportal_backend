@@ -495,7 +495,16 @@ public sealed class OperationsReadService : IOperationsReadService
         if (endDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt <= endDate.Value);
         if (salesmanId.HasValue) profitQuery = profitQuery.Where(x => x.SalesmanId == salesmanId.Value);
         var finalProfitRecords = await profitQuery
-            .Select(x => new { x.SalesmanId, x.BookingType, x.ProfitAmount })
+            .Select(x => new {
+                x.SalesmanId,
+                x.BookingType,
+                x.BookingId,
+                x.DocumentNumber,
+                x.ProfitAmount,
+                x.FinalSupplierCost,
+                x.AccountsApprovedTotal,
+                x.PayableAmount
+            })
             .ToListAsync(ct);
 
         var serviceDefinitions = new (string Type, string Label)[]
@@ -509,27 +518,113 @@ public sealed class OperationsReadService : IOperationsReadService
             ("Other", "Other Services")
         };
 
+        var profitById = new Dictionary<string, (decimal Profit, decimal Cost, decimal Sales)>(StringComparer.OrdinalIgnoreCase);
+        var profitByDoc = new Dictionary<string, (decimal Profit, decimal Cost, decimal Sales)>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var r in finalProfitRecords)
+        {
+            var approvedCost = r.AccountsApprovedTotal ?? r.FinalSupplierCost;
+            if (r.BookingId > 0)
+            {
+                profitById[$"{r.BookingType}:{r.BookingId}"] = (r.ProfitAmount, approvedCost, r.PayableAmount);
+            }
+            if (!string.IsNullOrWhiteSpace(r.DocumentNumber))
+            {
+                profitByDoc[$"{r.BookingType}:{r.DocumentNumber.Trim()}"] = (r.ProfitAmount, approvedCost, r.PayableAmount);
+            }
+        }
+
         var serviceBreakdown = new List<TexasPortal.Contracts.Sales.Performance.ServiceBookingFinancialItem>();
 
         foreach (var def in serviceDefinitions)
         {
             var items = allBookings.Where(x => x.ServiceType == def.Type).ToList();
             var sales = items.Sum(x => x.PayableAmount);
-            var cost = items.Sum(x => x.ExpectedSupplierCost);
-            var profit = items.Sum(x => x.ExpectedProfit);
+            
+            decimal cost = 0m;
+            decimal finalProfit = 0m;
+            decimal grossProfit = 0m;
+            var matchedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-            decimal finalProfit;
-            if (isOpenOnly)
+            foreach (var item in items)
             {
-                finalProfit = 0m;
+                var idKey = $"{item.ServiceType}:{item.BookingId}";
+                var docKey = !string.IsNullOrWhiteSpace(item.DocumentNumber) ? $"{item.ServiceType}:{item.DocumentNumber.Trim()}" : null;
+
+                (decimal Profit, decimal Cost, decimal Sales)? match = null;
+                if (profitById.TryGetValue(idKey, out var byId))
+                {
+                    match = byId;
+                    matchedKeys.Add(idKey);
+                    if (docKey != null) matchedKeys.Add(docKey);
+                }
+                else if (docKey != null && profitByDoc.TryGetValue(docKey, out var byDoc))
+                {
+                    match = byDoc;
+                    matchedKeys.Add(idKey);
+                    matchedKeys.Add(docKey);
+                }
+
+                if (isOpenOnly)
+                {
+                    cost += item.ExpectedSupplierCost;
+                    grossProfit += item.ExpectedProfit;
+                    finalProfit += 0m;
+                }
+                else if (isClosedOnly)
+                {
+                    if (match.HasValue)
+                    {
+                        cost += match.Value.Cost;
+                        finalProfit += match.Value.Profit;
+                        grossProfit += match.Value.Profit;
+                    }
+                    else
+                    {
+                        cost += item.ExpectedSupplierCost;
+                        finalProfit += item.ExpectedProfit;
+                        grossProfit += item.ExpectedProfit;
+                    }
+                }
+                else
+                {
+                    // "all" deal status
+                    if (match.HasValue)
+                    {
+                        cost += match.Value.Cost;
+                        finalProfit += match.Value.Profit;
+                        grossProfit += match.Value.Profit;
+                    }
+                    else
+                    {
+                        cost += item.ExpectedSupplierCost;
+                        grossProfit += item.ExpectedProfit;
+                        if (item.IsDealClosed)
+                        {
+                            finalProfit += item.ExpectedProfit;
+                        }
+                    }
+                }
             }
-            else if (isClosedOnly)
+
+            // Include any finalized profit records for this service type that were not in items (e.g. historical or unmapped entries)
+            if (!isOpenOnly)
             {
-                finalProfit = profit;
-            }
-            else
-            {
-                finalProfit = finalProfitRecords.Where(x => x.BookingType == def.Type).Sum(x => x.ProfitAmount);
+                foreach (var r in finalProfitRecords.Where(x => string.Equals(x.BookingType, def.Type, StringComparison.OrdinalIgnoreCase)))
+                {
+                    var idKey = $"{r.BookingType}:{r.BookingId}";
+                    var docKey = !string.IsNullOrWhiteSpace(r.DocumentNumber) ? $"{r.BookingType}:{r.DocumentNumber.Trim()}" : null;
+
+                    bool alreadyCounted = matchedKeys.Contains(idKey) || (docKey != null && matchedKeys.Contains(docKey));
+                    if (!alreadyCounted)
+                    {
+                        var approvedCost = r.AccountsApprovedTotal ?? r.FinalSupplierCost;
+                        cost += approvedCost;
+                        finalProfit += r.ProfitAmount;
+                        grossProfit += r.ProfitAmount;
+                        sales += r.PayableAmount;
+                    }
+                }
             }
 
             serviceBreakdown.Add(new TexasPortal.Contracts.Sales.Performance.ServiceBookingFinancialItem
@@ -539,15 +634,15 @@ public sealed class OperationsReadService : IOperationsReadService
                 BookingCount = items.Count,
                 SalesAmount = sales,
                 CostAmount = cost,
-                ProfitAmount = profit,
+                ProfitAmount = grossProfit,
                 FinalProfitAmount = finalProfit
             });
         }
 
         var totalBookings = allBookings.Count;
-        var totalSales = allBookings.Sum(x => x.PayableAmount);
-        var totalCost = allBookings.Sum(x => x.ExpectedSupplierCost);
-        var totalProfit = allBookings.Sum(x => x.ExpectedProfit);
+        var totalSales = serviceBreakdown.Sum(x => x.SalesAmount);
+        var totalCost = serviceBreakdown.Sum(x => x.CostAmount);
+        var totalProfit = serviceBreakdown.Sum(x => x.ProfitAmount);
         var totalFinalProfit = serviceBreakdown.Sum(x => x.FinalProfitAmount);
         var totalEstimatedProfit = Math.Max(0m, totalProfit - totalFinalProfit);
 
