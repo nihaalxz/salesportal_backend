@@ -201,6 +201,191 @@ namespace TexasPortal.UnitTests.Sales
             var updatedVisa = await db.SalesVisaApplications.FirstOrDefaultAsync(x => x.Id == 100L);
             Assert.NotNull(updatedVisa);
             Assert.Equal(15.000m, updatedVisa.Profit);
+            Assert.False(record.IsFinal);
+        }
+
+        [Fact]
+        public async Task FinalizeOrUpdateProfitAsync_NonApprovedCostClosedWithExpectedCost_DoesNotCountFullSaleOrFinalize()
+        {
+            // Arrange
+            using var db = CreateInMemoryDbContext();
+            var fakeClient = new FakeAgentsApiClient
+            {
+                SupplierPaymentSummary = new BookingSupplierPaymentSummary("Visa", "101", 0m, new List<ApprovedSupplierPaymentItem>()) // Accounts responded with 0 approved payments
+            };
+
+            var user = new User
+            {
+                Id = 11,
+                Name = "Salesman B",
+                Email = "salesmanB@texas.com",
+                Password = "hashed_secret_password",
+                UserType = "Salesman",
+                ProfitGenerated = 0m
+            };
+            db.Users.Add(user);
+
+            var visa = new SalesVisaApplication
+            {
+                Id = 101,
+                UserId = 11,
+                ClientType = "Walk-in",
+                DocumentNumber = "TXSVISA999915",
+                PayableAmount = 50.000m,
+                ExpectedSupplierCost = 5.000m,
+                Profit = 45.000m,
+                ProcessingStatus = "completed",
+                IsDealClosed = true,
+                IsInhouse = true // Even if flagged inhouse, ExpectedSupplierCost must not be discarded
+            };
+            db.SalesVisaApplications.Add(visa);
+            await db.SaveChangesAsync(default);
+
+            var service = new SalesmanProfitService(db, fakeClient, NullLogger<SalesmanProfitService>.Instance);
+
+            // Act
+            var record = await service.FinalizeOrUpdateProfitAsync("Visa", "101");
+
+            // Assert
+            Assert.NotNull(record);
+            Assert.Equal(50.000m, record.PayableAmount);
+            Assert.Equal(5.000m, record.FinalSupplierCost);
+            Assert.Equal(45.000m, record.ProfitAmount);
+            Assert.Equal(ProfitType.Normal, record.ProfitType);
+            Assert.Equal(SupplierCostSource.Estimated, record.SupplierCostSource);
+            Assert.Null(record.AccountsApprovedTotal);
+            Assert.False(record.IsFinal);
+        }
+
+        [Fact]
+        public async Task FinalizeOrUpdateProfitAsync_ZeroCostDealClosedWithoutAccountsPayment_AutoApprovesZeroCostAndFinalizes()
+        {
+            // Arrange
+            using var db = CreateInMemoryDbContext();
+            var fakeClient = new FakeAgentsApiClient
+            {
+                SupplierPaymentSummary = new BookingSupplierPaymentSummary("Other", "33", 0m, new List<ApprovedSupplierPaymentItem>()) // Accounts responded with 0 approved payments
+            };
+
+            var user = new User
+            {
+                Id = 14,
+                Name = "SAHIRDHEEN",
+                Email = "sahir@texas.com",
+                Password = "hashed_secret_password",
+                UserType = "Salesman",
+                ProfitGenerated = 0m
+            };
+            db.Users.Add(user);
+
+            var other = new OtherService
+            {
+                Id = 33,
+                CreatedBy = 14,
+                Prefix = "Ms",
+                Name = "Kaneez Fatima",
+                Supplier = "Inhouse",
+                ServiceName = "Typing",
+                PaymentMethod = "cash",
+                DocumentNumber = "TXSOTHR016135",
+                PayableAmount = 5.000m,
+                ExpectedSupplierCost = 0.000m,
+                Profit = 5.000m,
+                ProcessingStatus = "pending",
+                IsDealClosed = true,
+                IsInhouse = true
+            };
+            db.OtherServices.Add(other);
+            await db.SaveChangesAsync(default);
+
+            var service = new SalesmanProfitService(db, fakeClient, NullLogger<SalesmanProfitService>.Instance);
+
+            // Act
+            var record = await service.FinalizeOrUpdateProfitAsync("Other", "33");
+
+            // Assert
+            Assert.NotNull(record);
+            Assert.Equal(5.000m, record.PayableAmount);
+            Assert.Equal(0.000m, record.FinalSupplierCost);
+            Assert.Equal(5.000m, record.ProfitAmount);
+            Assert.Equal(0.000m, record.AccountsApprovedTotal);
+            Assert.Equal(SupplierCostSource.Approved, record.SupplierCostSource);
+            Assert.True(record.IsFinal);
+
+            // Act 2: Unlock deal -> Unfinalize reverts implicit 0.000 approved total
+            other.IsDealClosed = false;
+            await db.SaveChangesAsync(default);
+            var unlocked = await service.UnfinalizeProfitAsync("Other", "33");
+
+            Assert.NotNull(unlocked);
+            Assert.False(unlocked.IsFinal);
+            Assert.Null(unlocked.AccountsApprovedTotal);
+            Assert.Equal(SupplierCostSource.Estimated, unlocked.SupplierCostSource);
+        }
+
+        [Fact]
+        public async Task FinalizeOrUpdateProfitAsync_AccountsApiUnavailable_PreservesExistingApprovedTotal()
+        {
+            // Arrange
+            using var db = CreateInMemoryDbContext();
+            var fakeClient = new FakeAgentsApiClient
+            {
+                SupplierPaymentSummary = null // Simulates Accounts API timeout/failure
+            };
+
+            var user = new User
+            {
+                Id = 12,
+                Name = "Salesman C",
+                Email = "salesmanC@texas.com",
+                Password = "hashed_secret_password",
+                UserType = "Salesman",
+                ProfitGenerated = 0m
+            };
+            db.Users.Add(user);
+
+            var visa = new SalesVisaApplication
+            {
+                Id = 828,
+                UserId = 12,
+                ClientType = "Walk-in",
+                DocumentNumber = "TXSVISA686305",
+                PayableAmount = 25.000m,
+                ExpectedSupplierCost = 17.000m,
+                Profit = 8.000m,
+                ProcessingStatus = "completed",
+                IsDealClosed = true,
+                IsInhouse = false
+            };
+            db.SalesVisaApplications.Add(visa);
+            db.SalesmanProfitRecords.Add(new SalesmanProfitRecord
+            {
+                SalesmanId = 12,
+                BookingType = "Visa",
+                BookingId = 828,
+                DocumentNumber = "TXSVISA686305",
+                PayableAmount = 25.000m,
+                FinalSupplierCost = 17.000m,
+                ProfitAmount = 8.000m,
+                AccountsApprovedTotal = 17.000m,
+                SupplierCostSource = SupplierCostSource.Approved,
+                IsFinal = true,
+                BookingCreatedAt = DateTime.UtcNow
+            });
+            await db.SaveChangesAsync(default);
+
+            var service = new SalesmanProfitService(db, fakeClient, NullLogger<SalesmanProfitService>.Instance);
+
+            // Act
+            var record = await service.FinalizeOrUpdateProfitAsync("Visa", "828");
+
+            // Assert
+            Assert.NotNull(record);
+            Assert.Equal(17.000m, record.AccountsApprovedTotal);
+            Assert.Equal(17.000m, record.FinalSupplierCost);
+            Assert.Equal(8.000m, record.ProfitAmount);
+            Assert.Equal(SupplierCostSource.Approved, record.SupplierCostSource);
+            Assert.True(record.IsFinal);
         }
     }
 }

@@ -82,7 +82,8 @@ public class SalesmanProfitService : ISalesmanProfitService
 
         if (existing != null)
         {
-            if (existing.ProfitType == ProfitType.Inhouse && !isInhouse && estimatedSupplierCost > 0m)
+            if (!existing.AccountsApprovedTotal.HasValue && estimatedSupplierCost > 0m &&
+                (existing.ProfitType == ProfitType.Inhouse || existing.FinalSupplierCost != estimatedSupplierCost))
             {
                 existing.ProfitType = ProfitType.Normal;
                 existing.FinalSupplierCost = estimatedSupplierCost;
@@ -97,9 +98,10 @@ public class SalesmanProfitService : ISalesmanProfitService
             return existing;
         }
 
-        var profitType = isInhouse ? ProfitType.Inhouse : ProfitType.Normal;
+        var effectiveInhouse = isInhouse && estimatedSupplierCost == 0m;
+        var profitType = effectiveInhouse ? ProfitType.Inhouse : ProfitType.Normal;
         var supplierCostSource = SupplierCostSource.Estimated;
-        var finalSupplierCost = isInhouse ? 0m : estimatedSupplierCost;
+        var finalSupplierCost = estimatedSupplierCost;
         var profitAmount = CalculateNormalProfit(payableAmount, finalSupplierCost);
 
         var record = new SalesmanProfitRecord
@@ -177,6 +179,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             case "Holiday": typesToTry.AddRange(["holiday", "holiday_package", "holiday-packages"]); break;
         }
 
+        bool accountsResponded = false;
         BookingSupplierPaymentSummary? approvedSummary = null;
         var refsToTry = new List<string>();
         if (!string.IsNullOrEmpty(searchRef)) refsToTry.Add(searchRef);
@@ -187,10 +190,15 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             foreach (var t in typesToTry.Distinct())
             {
-                approvedSummary = await _agentsApiClient.GetBookingSupplierPaymentsAsync(t, r, ct);
-                if (approvedSummary != null && approvedSummary.Payments != null && approvedSummary.Payments.Count > 0)
+                var summary = await _agentsApiClient.GetBookingSupplierPaymentsAsync(t, r, ct);
+                if (summary != null)
                 {
-                    break;
+                    accountsResponded = true;
+                    approvedSummary = summary;
+                    if (summary.Payments != null && summary.Payments.Count > 0)
+                    {
+                        break;
+                    }
                 }
             }
             if (approvedSummary != null && approvedSummary.Payments != null && approvedSummary.Payments.Count > 0)
@@ -200,17 +208,27 @@ public class SalesmanProfitService : ISalesmanProfitService
         }
 
         bool hasApprovedPayments = approvedSummary != null && approvedSummary.Payments != null && approvedSummary.Payments.Count > 0;
-        var approvedTotal = hasApprovedPayments ? approvedSummary!.ApprovedTotal : (record?.AccountsApprovedTotal ?? 0m);
         bool isCompleted = isDealClosed || string.Equals(processingStatus, "completed", StringComparison.OrdinalIgnoreCase);
+        bool isZeroCostAutoApproved = isCompleted && accountsResponded && !hasApprovedPayments && expectedSupplierCost == 0m;
+        bool hasPriorApprovedTotal = record != null && record.AccountsApprovedTotal.HasValue;
+        bool isCostApproved = hasApprovedPayments
+            || isZeroCostAutoApproved
+            || (!accountsResponded && hasPriorApprovedTotal)
+            || (isCompleted && hasPriorApprovedTotal && !(accountsResponded && !hasApprovedPayments && expectedSupplierCost > 0m));
+
+        var approvedTotal = hasApprovedPayments
+            ? approvedSummary!.ApprovedTotal
+            : (isZeroCostAutoApproved ? 0m : (record?.AccountsApprovedTotal ?? 0m));
 
         if (record == null)
         {
             if (salesmanId == 0) return null;
 
-            bool effectiveInhouse = isInhouse && !hasApprovedPayments;
+            bool effectiveInhouse = isInhouse && !isCostApproved && expectedSupplierCost == 0m;
             var pType = isRejected ? ProfitType.Rejection : (effectiveInhouse ? ProfitType.Inhouse : ProfitType.Normal);
-            var effectiveCost = hasApprovedPayments ? approvedTotal : (isInhouse ? 0m : expectedSupplierCost);
+            var effectiveCost = isCostApproved ? approvedTotal : expectedSupplierCost;
             var pAmt = isRejected ? CalculateRejectionProfit(rejFee) : CalculateNormalProfit(payable, effectiveCost);
+            bool recordIsFinal = isRejected || (isCompleted && isCostApproved);
 
             record = new SalesmanProfitRecord
             {
@@ -222,12 +240,12 @@ public class SalesmanProfitService : ISalesmanProfitService
                 FinalSupplierCost = effectiveCost,
                 ProfitAmount = pAmt,
                 ProfitType = pType,
-                SupplierCostSource = hasApprovedPayments ? SupplierCostSource.Approved : SupplierCostSource.Estimated,
-                AccountsApprovedTotal = hasApprovedPayments ? approvedTotal : null,
+                SupplierCostSource = isCostApproved ? SupplierCostSource.Approved : SupplierCostSource.Estimated,
+                AccountsApprovedTotal = isCostApproved ? approvedTotal : null,
                 RejectionFee = isRejected ? rejFee : null,
-                IsFinal = isCompleted,
+                IsFinal = recordIsFinal,
                 BookingCreatedAt = createdAt,
-                FinalizedAt = isCompleted ? DateTime.UtcNow : null,
+                FinalizedAt = recordIsFinal ? DateTime.UtcNow : null,
                 LastReconciledAt = DateTime.UtcNow,
                 CreatedAt = DateTime.UtcNow,
                 UpdatedAt = DateTime.UtcNow
@@ -266,9 +284,14 @@ public class SalesmanProfitService : ISalesmanProfitService
 
         // Recalculate Final Profit
         record.PayableAmount = payable;
-        if (hasApprovedPayments)
+        if (hasApprovedPayments || isZeroCostAutoApproved)
         {
             record.AccountsApprovedTotal = approvedTotal;
+        }
+        else if (accountsResponded && !hasApprovedPayments && !isCompleted)
+        {
+            // Unlocked / open deal with no approved payments in Accounts: revert implicit 0.000
+            record.AccountsApprovedTotal = null;
         }
 
         var adjustmentsSum = await _db.SalesmanProfitAdjustments
@@ -278,20 +301,21 @@ public class SalesmanProfitService : ISalesmanProfitService
         if (record.ProfitType == ProfitType.Rejection)
         {
             record.ProfitAmount = CalculateRejectionProfit(record.RejectionFee ?? 0m, adjustmentsSum);
+            record.IsFinal = true;
+            record.FinalizedAt = record.FinalizedAt ?? DateTime.UtcNow;
         }
         else
         {
-            bool effectiveInhouse = isInhouse && !hasApprovedPayments;
+            bool effectiveInhouse = isInhouse && !isCostApproved && expectedSupplierCost == 0m;
             record.ProfitType = effectiveInhouse ? ProfitType.Inhouse : ProfitType.Normal;
-            record.FinalSupplierCost = hasApprovedPayments ? approvedTotal : (isInhouse ? 0m : expectedSupplierCost);
-            record.SupplierCostSource = hasApprovedPayments ? SupplierCostSource.Approved : SupplierCostSource.Estimated;
+            record.FinalSupplierCost = isCostApproved ? approvedTotal : expectedSupplierCost;
+            record.SupplierCostSource = isCostApproved ? SupplierCostSource.Approved : SupplierCostSource.Estimated;
 
-            // Full sale amount if FinalSupplierCost == 0
             record.ProfitAmount = CalculateNormalProfit(record.PayableAmount, record.FinalSupplierCost, adjustmentsSum);
+            bool recordIsFinal = isCompleted && isCostApproved;
+            record.IsFinal = recordIsFinal;
+            record.FinalizedAt = recordIsFinal ? (record.FinalizedAt ?? DateTime.UtcNow) : null;
         }
-
-        record.IsFinal = isCompleted;
-        record.FinalizedAt = isCompleted ? (record.FinalizedAt ?? DateTime.UtcNow) : null;
         record.LastReconciledAt = DateTime.UtcNow;
         record.UpdatedAt = DateTime.UtcNow;
 
@@ -469,6 +493,22 @@ public class SalesmanProfitService : ISalesmanProfitService
             .FirstOrDefaultAsync(r => r.BookingType == normType && ((numericId > 0 && r.BookingId == numericId) || (r.DocumentNumber != null && r.DocumentNumber == bookingIdOrRef)), ct);
 
         if (record == null) return null;
+
+        if (record.ProfitType != ProfitType.Rejection)
+        {
+            // Re-reconcile against Accounts & current deal open state so implicit zero-cost approvals revert cleanly if unlocked
+            var refreshed = await FinalizeOrUpdateProfitAsync(normType, bookingIdOrRef, ct);
+            if (refreshed != null)
+            {
+                refreshed.IsFinal = false;
+                refreshed.FinalizedAt = null;
+                await _db.SaveChangesAsync(ct);
+                await SyncBookingProfitEntityAndUserTotalAsync(normType, refreshed.BookingId, refreshed.ProfitAmount, refreshed.SalesmanId, ct);
+                await _db.SaveChangesAsync(ct);
+                _logger.LogInformation("Profit unfinalized for {BookingType} #{BookingId}. Recognized profit removed from salesman total.", normType, refreshed.BookingId);
+                return refreshed;
+            }
+        }
 
         record.IsFinal = false;
         record.FinalizedAt = null;
@@ -839,13 +879,14 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Flight:{f.Id}"))
             {
-                bool isFlightInhouse = f.Passengers != null && f.Passengers.Count > 0
-                    ? f.Passengers.All(p => p.IsInhouse)
-                    : f.IsInhouse;
                 decimal flightCost = f.Passengers != null && f.Passengers.Count > 0
                     ? f.Passengers.Sum(p => p.ExpectedSupplierCost)
                     : f.ExpectedSupplierCost;
-                var pAmt = isFlightInhouse ? CalculateNormalProfit(f.PayableAmount, 0m) : CalculateNormalProfit(f.PayableAmount, flightCost);
+                if (flightCost == 0m && f.ExpectedSupplierCost > 0m) flightCost = f.ExpectedSupplierCost;
+                bool isFlightInhouse = (f.Passengers != null && f.Passengers.Count > 0
+                    ? f.Passengers.All(p => p.IsInhouse)
+                    : f.IsInhouse) && flightCost == 0m;
+                var pAmt = CalculateNormalProfit(f.PayableAmount, flightCost);
 
                 newRecords.Add(new SalesmanProfitRecord
                 {
@@ -854,11 +895,11 @@ public class SalesmanProfitService : ISalesmanProfitService
                     BookingId = f.Id,
                     DocumentNumber = f.DocumentNumber,
                     PayableAmount = f.PayableAmount,
-                    FinalSupplierCost = isFlightInhouse ? 0m : flightCost,
+                    FinalSupplierCost = flightCost,
                     ProfitAmount = pAmt,
                     ProfitType = isFlightInhouse ? ProfitType.Inhouse : ProfitType.Normal,
                     SupplierCostSource = SupplierCostSource.Estimated,
-                    IsFinal = f.IsDealClosed || string.Equals(f.ProcessingStatus, "completed", StringComparison.OrdinalIgnoreCase),
+                    IsFinal = false,
                     BookingCreatedAt = f.CreatedAt ?? DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -875,7 +916,8 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Hotel:{h.Id}"))
             {
-                var pAmt = h.IsInhouse ? CalculateNormalProfit(h.PayableAmount, 0m) : CalculateNormalProfit(h.PayableAmount, h.ExpectedSupplierCost);
+                bool isHotelInhouse = h.IsInhouse && h.ExpectedSupplierCost == 0m && (!h.SupplierId.HasValue || h.SupplierId.Value <= 0);
+                var pAmt = CalculateNormalProfit(h.PayableAmount, h.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -883,11 +925,11 @@ public class SalesmanProfitService : ISalesmanProfitService
                     BookingId = h.Id,
                     DocumentNumber = h.DocumentNumber,
                     PayableAmount = h.PayableAmount,
-                    FinalSupplierCost = h.IsInhouse ? 0m : h.ExpectedSupplierCost,
+                    FinalSupplierCost = h.ExpectedSupplierCost,
                     ProfitAmount = pAmt,
-                    ProfitType = h.IsInhouse ? ProfitType.Inhouse : ProfitType.Normal,
+                    ProfitType = isHotelInhouse ? ProfitType.Inhouse : ProfitType.Normal,
                     SupplierCostSource = SupplierCostSource.Estimated,
-                    IsFinal = h.IsDealClosed || string.Equals(h.ProcessingStatus, "completed", StringComparison.OrdinalIgnoreCase),
+                    IsFinal = false,
                     BookingCreatedAt = h.CreatedAt ?? DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -905,13 +947,14 @@ public class SalesmanProfitService : ISalesmanProfitService
             if (!existingSet.Contains($"Visa:{v.Id}"))
             {
                 bool isRej = string.Equals(v.ProcessingStatus, "rejected", StringComparison.OrdinalIgnoreCase);
-                bool isVisaInhouse = v.Applicants != null && v.Applicants.Count > 0
-                    ? v.Applicants.All(a => a.IsInhouse)
-                    : v.IsInhouse;
                 decimal visaExpectedCost = v.Applicants != null && v.Applicants.Count > 0
-                    ? v.Applicants.Where(a => !a.IsInhouse).Sum(a => a.ExpectedSupplierCost)
+                    ? v.Applicants.Sum(a => a.ExpectedSupplierCost)
                     : v.ExpectedSupplierCost;
-                var pAmt = isRej ? CalculateRejectionProfit(v.RejectionFee) : (isVisaInhouse ? CalculateNormalProfit(v.PayableAmount, 0m) : CalculateNormalProfit(v.PayableAmount, visaExpectedCost));
+                if (visaExpectedCost == 0m && v.ExpectedSupplierCost > 0m) visaExpectedCost = v.ExpectedSupplierCost;
+                bool isVisaInhouse = (v.Applicants != null && v.Applicants.Count > 0
+                    ? v.Applicants.All(a => a.IsInhouse)
+                    : v.IsInhouse) && visaExpectedCost == 0m;
+                var pAmt = isRej ? CalculateRejectionProfit(v.RejectionFee) : CalculateNormalProfit(v.PayableAmount, visaExpectedCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -919,11 +962,11 @@ public class SalesmanProfitService : ISalesmanProfitService
                     BookingId = v.Id,
                     DocumentNumber = v.DocumentNumber,
                     PayableAmount = v.PayableAmount,
-                    FinalSupplierCost = isVisaInhouse ? 0m : visaExpectedCost,
+                    FinalSupplierCost = isRej ? 0m : visaExpectedCost,
                     ProfitAmount = pAmt,
                     ProfitType = isRej ? ProfitType.Rejection : (isVisaInhouse ? ProfitType.Inhouse : ProfitType.Normal),
-                    SupplierCostSource = SupplierCostSource.Estimated,
-                    IsFinal = v.IsDealClosed || string.Equals(v.ProcessingStatus, "completed", StringComparison.OrdinalIgnoreCase),
+                    SupplierCostSource = isRej ? SupplierCostSource.Rejection : SupplierCostSource.Estimated,
+                    IsFinal = isRej,
                     BookingCreatedAt = v.CreatedAt ?? DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -940,7 +983,8 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"VFS:{vfs.Id}"))
             {
-                var pAmt = vfs.IsInhouse ? CalculateNormalProfit(vfs.PayableAmount, 0m) : CalculateNormalProfit(vfs.PayableAmount, vfs.ExpectedSupplierCost);
+                bool isVfsInhouse = vfs.IsInhouse && vfs.ExpectedSupplierCost == 0m && (!vfs.SupplierId.HasValue || vfs.SupplierId.Value <= 0);
+                var pAmt = CalculateNormalProfit(vfs.PayableAmount, vfs.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -948,11 +992,11 @@ public class SalesmanProfitService : ISalesmanProfitService
                     BookingId = vfs.Id,
                     DocumentNumber = vfs.DocumentNumber,
                     PayableAmount = vfs.PayableAmount,
-                    FinalSupplierCost = vfs.IsInhouse ? 0m : vfs.ExpectedSupplierCost,
+                    FinalSupplierCost = vfs.ExpectedSupplierCost,
                     ProfitAmount = pAmt,
-                    ProfitType = vfs.IsInhouse ? ProfitType.Inhouse : ProfitType.Normal,
+                    ProfitType = isVfsInhouse ? ProfitType.Inhouse : ProfitType.Normal,
                     SupplierCostSource = SupplierCostSource.Estimated,
-                    IsFinal = vfs.IsDealClosed || string.Equals(vfs.ProcessingStatus, "completed", StringComparison.OrdinalIgnoreCase),
+                    IsFinal = false,
                     BookingCreatedAt = vfs.CreatedAt ?? DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -969,7 +1013,8 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Holiday:{hol.Id}"))
             {
-                var pAmt = hol.IsInhouse ? CalculateNormalProfit(hol.PayableAmount, 0m) : CalculateNormalProfit(hol.PayableAmount, hol.ExpectedSupplierCost);
+                bool isHolInhouse = hol.IsInhouse && hol.ExpectedSupplierCost == 0m && (!hol.SupplierId.HasValue || hol.SupplierId.Value <= 0);
+                var pAmt = CalculateNormalProfit(hol.PayableAmount, hol.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -977,11 +1022,11 @@ public class SalesmanProfitService : ISalesmanProfitService
                     BookingId = hol.Id,
                     DocumentNumber = hol.DocumentNumber,
                     PayableAmount = hol.PayableAmount,
-                    FinalSupplierCost = hol.IsInhouse ? 0m : hol.ExpectedSupplierCost,
+                    FinalSupplierCost = hol.ExpectedSupplierCost,
                     ProfitAmount = pAmt,
-                    ProfitType = hol.IsInhouse ? ProfitType.Inhouse : ProfitType.Normal,
+                    ProfitType = isHolInhouse ? ProfitType.Inhouse : ProfitType.Normal,
                     SupplierCostSource = SupplierCostSource.Estimated,
-                    IsFinal = hol.IsDealClosed || string.Equals(hol.ProcessingStatus, "completed", StringComparison.OrdinalIgnoreCase),
+                    IsFinal = false,
                     BookingCreatedAt = hol.CreatedAt ?? DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -998,7 +1043,8 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Transport:{tr.Id}"))
             {
-                var pAmt = tr.IsInhouse ? CalculateNormalProfit(tr.PayableAmount, 0m) : CalculateNormalProfit(tr.PayableAmount, tr.ExpectedSupplierCost);
+                bool isTrInhouse = tr.IsInhouse && tr.ExpectedSupplierCost == 0m && (!tr.SupplierId.HasValue || tr.SupplierId.Value <= 0);
+                var pAmt = CalculateNormalProfit(tr.PayableAmount, tr.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -1006,11 +1052,11 @@ public class SalesmanProfitService : ISalesmanProfitService
                     BookingId = tr.Id,
                     DocumentNumber = tr.DocumentNumber,
                     PayableAmount = tr.PayableAmount,
-                    FinalSupplierCost = tr.IsInhouse ? 0m : tr.ExpectedSupplierCost,
+                    FinalSupplierCost = tr.ExpectedSupplierCost,
                     ProfitAmount = pAmt,
-                    ProfitType = tr.IsInhouse ? ProfitType.Inhouse : ProfitType.Normal,
+                    ProfitType = isTrInhouse ? ProfitType.Inhouse : ProfitType.Normal,
                     SupplierCostSource = SupplierCostSource.Estimated,
-                    IsFinal = tr.IsDealClosed || string.Equals(tr.ProcessingStatus, "completed", StringComparison.OrdinalIgnoreCase),
+                    IsFinal = false,
                     BookingCreatedAt = tr.CreatedAt ?? DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -1027,7 +1073,8 @@ public class SalesmanProfitService : ISalesmanProfitService
         {
             if (!existingSet.Contains($"Other:{ot.Id}"))
             {
-                var pAmt = ot.IsInhouse ? CalculateNormalProfit(ot.PayableAmount, 0m) : CalculateNormalProfit(ot.PayableAmount, ot.ExpectedSupplierCost);
+                bool isOtInhouse = ot.IsInhouse && ot.ExpectedSupplierCost == 0m && (!ot.SupplierId.HasValue || ot.SupplierId.Value <= 0);
+                var pAmt = CalculateNormalProfit(ot.PayableAmount, ot.ExpectedSupplierCost);
                 newRecords.Add(new SalesmanProfitRecord
                 {
                     SalesmanId = salesmanId,
@@ -1035,11 +1082,11 @@ public class SalesmanProfitService : ISalesmanProfitService
                     BookingId = ot.Id,
                     DocumentNumber = ot.DocumentNumber,
                     PayableAmount = ot.PayableAmount,
-                    FinalSupplierCost = ot.IsInhouse ? 0m : ot.ExpectedSupplierCost,
+                    FinalSupplierCost = ot.ExpectedSupplierCost,
                     ProfitAmount = pAmt,
-                    ProfitType = ot.IsInhouse ? ProfitType.Inhouse : ProfitType.Normal,
+                    ProfitType = isOtInhouse ? ProfitType.Inhouse : ProfitType.Normal,
                     SupplierCostSource = SupplierCostSource.Estimated,
-                    IsFinal = ot.IsDealClosed || string.Equals(ot.ProcessingStatus, "completed", StringComparison.OrdinalIgnoreCase),
+                    IsFinal = false,
                     BookingCreatedAt = ot.CreatedAt ?? DateTime.UtcNow,
                     CreatedAt = DateTime.UtcNow,
                     UpdatedAt = DateTime.UtcNow
@@ -1068,8 +1115,14 @@ public class SalesmanProfitService : ISalesmanProfitService
 
         var existingMap = await _db.SalesmanProfitRecords
             .AsNoTracking()
-            .Select(r => new { r.BookingType, r.BookingId, r.IsFinal })
-            .ToDictionaryAsync(r => $"{r.BookingType}:{r.BookingId}", r => r.IsFinal, ct);
+            .Select(r => new { r.BookingType, r.BookingId, r.IsFinal, r.SupplierCostSource, r.AccountsApprovedTotal })
+            .ToDictionaryAsync(r => $"{r.BookingType}:{r.BookingId}", r => r, ct);
+
+        bool ShouldSkipBackfill(string key) =>
+            existingMap.TryGetValue(key, out var ex)
+            && ex.IsFinal
+            && ex.SupplierCostSource == SupplierCostSource.Approved
+            && ex.AccountsApprovedTotal.HasValue;
 
         // 1. Visas
         var visas = await _db.SalesVisaApplications.AsNoTracking().Include(v => v.Applicants).ToListAsync(ct);
@@ -1079,7 +1132,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             try
             {
                 var key = $"Visa:{v.Id}";
-                if (existingMap.TryGetValue(key, out var isFinal) && isFinal)
+                if (ShouldSkipBackfill(key))
                 {
                     skipped++;
                     continue;
@@ -1096,12 +1149,14 @@ public class SalesmanProfitService : ISalesmanProfitService
                     }
                     else
                     {
-                        bool isVisaInhouse = v.Applicants != null && v.Applicants.Count > 0
-                            ? v.Applicants.All(a => a.IsInhouse)
-                            : v.IsInhouse;
                         decimal visaExpectedCost = v.Applicants != null && v.Applicants.Count > 0
-                            ? v.Applicants.Where(a => !a.IsInhouse).Sum(a => a.ExpectedSupplierCost)
+                            ? v.Applicants.Sum(a => a.ExpectedSupplierCost)
                             : v.ExpectedSupplierCost;
+                        if (visaExpectedCost == 0m && v.ExpectedSupplierCost > 0m)
+                            visaExpectedCost = v.ExpectedSupplierCost;
+                        bool isVisaInhouse = (v.Applicants != null && v.Applicants.Count > 0
+                            ? v.Applicants.All(a => a.IsInhouse)
+                            : v.IsInhouse) && visaExpectedCost == 0m;
                         rec = await CreateEstimatedProfitRecordAsync(v.UserId, "Visa", v.Id, v.DocumentNumber, v.PayableAmount, visaExpectedCost, isVisaInhouse, v.CreatedAt ?? DateTime.UtcNow, ct);
                     }
                     created++;
@@ -1126,7 +1181,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             try
             {
                 var key = $"VFS:{item.Id}";
-                if (existingMap.TryGetValue(key, out var isFinal) && isFinal) { skipped++; continue; }
+                if (ShouldSkipBackfill(key)) { skipped++; continue; }
 
                 var rec = await FinalizeOrUpdateProfitAsync("VFS", item.Id, ct);
                 if (rec == null)
@@ -1151,7 +1206,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             try
             {
                 var key = $"Holiday:{item.Id}";
-                if (existingMap.TryGetValue(key, out var isFinal) && isFinal) { skipped++; continue; }
+                if (ShouldSkipBackfill(key)) { skipped++; continue; }
 
                 var rec = await FinalizeOrUpdateProfitAsync("Holiday", item.Id, ct);
                 if (rec == null)
@@ -1176,7 +1231,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             try
             {
                 var key = $"Flight:{item.Id}";
-                if (existingMap.TryGetValue(key, out var isFinal) && isFinal) { skipped++; continue; }
+                if (ShouldSkipBackfill(key)) { skipped++; continue; }
 
                 var rec = await FinalizeOrUpdateProfitAsync("Flight", item.Id, ct);
                 if (rec == null)
@@ -1201,7 +1256,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             try
             {
                 var key = $"Hotel:{item.Id}";
-                if (existingMap.TryGetValue(key, out var isFinal) && isFinal) { skipped++; continue; }
+                if (ShouldSkipBackfill(key)) { skipped++; continue; }
 
                 var rec = await FinalizeOrUpdateProfitAsync("Hotel", item.Id, ct);
                 if (rec == null)
@@ -1226,7 +1281,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             try
             {
                 var key = $"Transport:{item.Id}";
-                if (existingMap.TryGetValue(key, out var isFinal) && isFinal) { skipped++; continue; }
+                if (ShouldSkipBackfill(key)) { skipped++; continue; }
 
                 var rec = await FinalizeOrUpdateProfitAsync("Transport", item.Id, ct);
                 if (rec == null)
@@ -1251,7 +1306,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             try
             {
                 var key = $"Other:{item.Id}";
-                if (existingMap.TryGetValue(key, out var isFinal) && isFinal) { skipped++; continue; }
+                if (ShouldSkipBackfill(key)) { skipped++; continue; }
 
                 var rec = await FinalizeOrUpdateProfitAsync("Other", item.Id, ct);
                 if (rec == null)
@@ -1296,12 +1351,14 @@ public class SalesmanProfitService : ISalesmanProfitService
                     .FirstOrDefaultAsync(x => (bId > 0 && x.Id == bId) || (x.DocumentNumber != null && x.DocumentNumber == bookingIdOrRef), ct);
                 if (visa != null)
                 {
-                    bool isVisaInhouse = visa.Applicants != null && visa.Applicants.Count > 0
-                        ? visa.Applicants.All(a => a.IsInhouse)
-                        : visa.IsInhouse;
                     decimal visaExpectedCost = visa.Applicants != null && visa.Applicants.Count > 0
-                        ? visa.Applicants.Where(a => !a.IsInhouse).Sum(a => a.ExpectedSupplierCost)
+                        ? visa.Applicants.Sum(a => a.ExpectedSupplierCost)
                         : visa.ExpectedSupplierCost;
+                    if (visaExpectedCost == 0m && visa.ExpectedSupplierCost > 0m)
+                        visaExpectedCost = visa.ExpectedSupplierCost;
+                    bool isVisaInhouse = (visa.Applicants != null && visa.Applicants.Count > 0
+                        ? visa.Applicants.All(a => a.IsInhouse)
+                        : visa.IsInhouse) && visaExpectedCost == 0m;
                     return (visa.UserId, visa.Id, visa.DocumentNumber, visa.PayableAmount, visaExpectedCost, visa.CreatedAt ?? DateTime.UtcNow, isVisaInhouse, string.Equals(visa.ProcessingStatus, "rejected", StringComparison.OrdinalIgnoreCase), visa.RejectionFee, visa.ProcessingStatus, visa.IsDealClosed);
                 }
                 break;
@@ -1310,14 +1367,14 @@ public class SalesmanProfitService : ISalesmanProfitService
                 var vfs = await _db.VfsAppointments.AsNoTracking()
                     .FirstOrDefaultAsync(x => (bId > 0 && x.Id == bId) || (x.DocumentNumber != null && x.DocumentNumber == bookingIdOrRef), ct);
                 if (vfs != null)
-                    return (vfs.CreatedBy, vfs.Id, vfs.DocumentNumber, vfs.PayableAmount, vfs.ExpectedSupplierCost, vfs.CreatedAt ?? DateTime.UtcNow, vfs.IsInhouse, false, 0m, vfs.ProcessingStatus, vfs.IsDealClosed);
+                    return (vfs.CreatedBy, vfs.Id, vfs.DocumentNumber, vfs.PayableAmount, vfs.ExpectedSupplierCost, vfs.CreatedAt ?? DateTime.UtcNow, vfs.IsInhouse && vfs.ExpectedSupplierCost == 0m && (!vfs.SupplierId.HasValue || vfs.SupplierId.Value <= 0), false, 0m, vfs.ProcessingStatus, vfs.IsDealClosed);
                 break;
 
             case "Holiday":
                 var hol = await _db.HolidayPackages.AsNoTracking()
                     .FirstOrDefaultAsync(x => (bId > 0 && x.Id == bId) || (x.DocumentNumber != null && x.DocumentNumber == bookingIdOrRef), ct);
                 if (hol != null)
-                    return (hol.CreatedBy, hol.Id, hol.DocumentNumber, hol.PayableAmount, hol.ExpectedSupplierCost, hol.CreatedAt ?? DateTime.UtcNow, hol.IsInhouse, false, 0m, hol.ProcessingStatus, hol.IsDealClosed);
+                    return (hol.CreatedBy, hol.Id, hol.DocumentNumber, hol.PayableAmount, hol.ExpectedSupplierCost, hol.CreatedAt ?? DateTime.UtcNow, hol.IsInhouse && hol.ExpectedSupplierCost == 0m && (!hol.SupplierId.HasValue || hol.SupplierId.Value <= 0), false, 0m, hol.ProcessingStatus, hol.IsDealClosed);
                 break;
 
             case "Flight":
@@ -1325,10 +1382,12 @@ public class SalesmanProfitService : ISalesmanProfitService
                     .FirstOrDefaultAsync(x => (bId > 0 && x.Id == bId) || (x.DocumentNumber != null && x.DocumentNumber == bookingIdOrRef), ct);
                 if (fli != null)
                 {
-                    bool isFlightInhouse = fli.Passengers != null && fli.Passengers.Count > 0
-                        ? fli.Passengers.All(p => p.IsInhouse)
-                        : fli.IsInhouse;
                     decimal flightExpectedCost = fli.Passengers != null && fli.Passengers.Count > 0 ? fli.Passengers.Sum(p => p.ExpectedSupplierCost) : fli.ExpectedSupplierCost;
+                    if (flightExpectedCost == 0m && fli.ExpectedSupplierCost > 0m)
+                        flightExpectedCost = fli.ExpectedSupplierCost;
+                    bool isFlightInhouse = (fli.Passengers != null && fli.Passengers.Count > 0
+                        ? fli.Passengers.All(p => p.IsInhouse)
+                        : fli.IsInhouse) && flightExpectedCost == 0m;
                     return (fli.UserId, fli.Id, fli.DocumentNumber, fli.PayableAmount, flightExpectedCost, fli.CreatedAt ?? DateTime.UtcNow, isFlightInhouse, false, 0m, fli.ProcessingStatus, fli.IsDealClosed);
                 }
                 break;
@@ -1337,21 +1396,21 @@ public class SalesmanProfitService : ISalesmanProfitService
                 var hot = await _db.HotelBookings.AsNoTracking()
                     .FirstOrDefaultAsync(x => (bId > 0 && x.Id == bId) || (x.DocumentNumber != null && x.DocumentNumber == bookingIdOrRef), ct);
                 if (hot != null)
-                    return (hot.UserId, hot.Id, hot.DocumentNumber, hot.PayableAmount, hot.ExpectedSupplierCost, hot.CreatedAt ?? DateTime.UtcNow, hot.IsInhouse, false, 0m, hot.ProcessingStatus, hot.IsDealClosed);
+                    return (hot.UserId, hot.Id, hot.DocumentNumber, hot.PayableAmount, hot.ExpectedSupplierCost, hot.CreatedAt ?? DateTime.UtcNow, hot.IsInhouse && hot.ExpectedSupplierCost == 0m && (!hot.SupplierId.HasValue || hot.SupplierId.Value <= 0), false, 0m, hot.ProcessingStatus, hot.IsDealClosed);
                 break;
 
             case "Transport":
                 var tr = await _db.Transportations.AsNoTracking()
                     .FirstOrDefaultAsync(x => (bId > 0 && x.Id == bId) || (x.DocumentNumber != null && x.DocumentNumber == bookingIdOrRef), ct);
                 if (tr != null)
-                    return (tr.CreatedBy, tr.Id, tr.DocumentNumber, tr.PayableAmount, tr.ExpectedSupplierCost, tr.CreatedAt ?? DateTime.UtcNow, tr.IsInhouse, false, 0m, tr.ProcessingStatus, tr.IsDealClosed);
+                    return (tr.CreatedBy, tr.Id, tr.DocumentNumber, tr.PayableAmount, tr.ExpectedSupplierCost, tr.CreatedAt ?? DateTime.UtcNow, tr.IsInhouse && tr.ExpectedSupplierCost == 0m && (!tr.SupplierId.HasValue || tr.SupplierId.Value <= 0), false, 0m, tr.ProcessingStatus, tr.IsDealClosed);
                 break;
 
             case "Other":
                 var ot = await _db.OtherServices.AsNoTracking()
                     .FirstOrDefaultAsync(x => (bId > 0 && x.Id == bId) || (x.DocumentNumber != null && x.DocumentNumber == bookingIdOrRef), ct);
                 if (ot != null)
-                    return (ot.CreatedBy, ot.Id, ot.DocumentNumber, ot.PayableAmount, ot.ExpectedSupplierCost, ot.CreatedAt ?? DateTime.UtcNow, ot.IsInhouse, false, 0m, ot.ProcessingStatus, ot.IsDealClosed);
+                    return (ot.CreatedBy, ot.Id, ot.DocumentNumber, ot.PayableAmount, ot.ExpectedSupplierCost, ot.CreatedAt ?? DateTime.UtcNow, ot.IsInhouse && ot.ExpectedSupplierCost == 0m && (!ot.SupplierId.HasValue || ot.SupplierId.Value <= 0), false, 0m, ot.ProcessingStatus, ot.IsDealClosed);
                 break;
         }
 

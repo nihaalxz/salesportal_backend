@@ -595,7 +595,8 @@ public sealed class OperationsReadService : IOperationsReadService
                     else
                     {
                         cost += item.ExpectedSupplierCost;
-                        finalProfit += item.ExpectedProfit;
+                        // Unapproved/non-finalized deals must not have their estimated profit counted as finalized profit
+                        finalProfit += 0m;
                         grossProfit += item.ExpectedProfit;
                     }
                 }
@@ -612,10 +613,8 @@ public sealed class OperationsReadService : IOperationsReadService
                     {
                         cost += item.ExpectedSupplierCost;
                         grossProfit += item.ExpectedProfit;
-                        if (item.IsDealClosed)
-                        {
-                            finalProfit += item.ExpectedProfit;
-                        }
+                        // Only finalized (cost-approved) records contribute to finalProfit
+                        finalProfit += 0m;
                     }
                 }
             }
@@ -818,10 +817,6 @@ public sealed class OperationsReadService : IOperationsReadService
                     finalProfit += valByDoc;
                     matchedKeys.Add(idKey);
                     matchedKeys.Add(docKey);
-                }
-                else if (item.IsDealClosed)
-                {
-                    finalProfit += item.ExpectedProfit;
                 }
             }
 
