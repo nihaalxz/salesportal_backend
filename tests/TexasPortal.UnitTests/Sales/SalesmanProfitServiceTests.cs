@@ -387,5 +387,59 @@ namespace TexasPortal.UnitTests.Sales
             Assert.Equal(SupplierCostSource.Approved, record.SupplierCostSource);
             Assert.True(record.IsFinal);
         }
+
+        [Fact]
+        public async Task FinalizeOrUpdateProfitAsync_RejectionRecord_DoesNotDoubleCountRejectionFeeAdjustment()
+        {
+            // Arrange
+            using var db = CreateInMemoryDbContext();
+            var fakeClient = new FakeAgentsApiClient
+            {
+                SupplierPaymentSummary = new BookingSupplierPaymentSummary("Visa", "870", 0m, new List<ApprovedSupplierPaymentItem>())
+            };
+
+            var user = new User
+            {
+                Id = 8,
+                Name = "SHARAFUDHEEN",
+                Email = "sharaf@texas.com",
+                Password = "hashed_secret_password",
+                UserType = "Salesman",
+                ProfitGenerated = 0m
+            };
+            db.Users.Add(user);
+
+            var visa = new SalesVisaApplication
+            {
+                Id = 870,
+                UserId = 8,
+                ClientType = "Walk-in",
+                DocumentNumber = "TXSVISA172350",
+                PayableAmount = 18.000m,
+                ExpectedSupplierCost = 5.000m,
+                RejectionFee = 7.000m,
+                Profit = 7.000m,
+                ProcessingStatus = "rejected",
+                IsDealClosed = false,
+                IsInhouse = false
+            };
+            db.SalesVisaApplications.Add(visa);
+            await db.SaveChangesAsync(default);
+
+            var service = new SalesmanProfitService(db, fakeClient, NullLogger<SalesmanProfitService>.Instance);
+
+            // Act 1: Record rejection profit (creates RejectionProfit audit adjustment row of 7.000)
+            var rejected = await service.FinalizeRejectionProfitAsync("Visa", 870, 7.000m);
+            Assert.NotNull(rejected);
+            Assert.Equal(7.000m, rejected.ProfitAmount);
+
+            // Act 2: Re-evaluate during backfill / reconciliation
+            var updated = await service.FinalizeOrUpdateProfitAsync("Visa", "870");
+
+            // Assert: Must remain 7.000, NOT 14.000
+            Assert.NotNull(updated);
+            Assert.Equal(7.000m, updated.ProfitAmount);
+            Assert.True(updated.IsFinal);
+        }
     }
 }

@@ -295,7 +295,8 @@ public class SalesmanProfitService : ISalesmanProfitService
         }
 
         var adjustmentsSum = await _db.SalesmanProfitAdjustments
-            .Where(a => a.SalesmanProfitRecordId == record.Id)
+            .Where(a => a.SalesmanProfitRecordId == record.Id &&
+                        (record.ProfitType != ProfitType.Rejection || a.AdjustmentType != SalesmanProfitAdjustmentType.RejectionProfit))
             .SumAsync(a => (decimal?)a.Amount, ct) ?? 0m;
 
         if (record.ProfitType == ProfitType.Rejection)
@@ -381,7 +382,7 @@ public class SalesmanProfitService : ISalesmanProfitService
             record.SupplierCostSource = SupplierCostSource.Rejection;
             record.RejectionFee = rejectionFee;
             var adjustmentsSum = await _db.SalesmanProfitAdjustments
-                .Where(a => a.SalesmanProfitRecordId == record.Id)
+                .Where(a => a.SalesmanProfitRecordId == record.Id && a.AdjustmentType != SalesmanProfitAdjustmentType.RejectionProfit)
                 .SumAsync(a => (decimal?)a.Amount, ct) ?? 0m;
             record.ProfitAmount = CalculateRejectionProfit(rejectionFee, adjustmentsSum);
             record.IsFinal = true;
