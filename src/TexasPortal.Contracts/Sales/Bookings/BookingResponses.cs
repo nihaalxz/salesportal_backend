@@ -544,6 +544,8 @@ public sealed class OpenDealEntryResponse
     public string? ProcessingStatus { get; set; }
     public bool IsDealClosed { get; set; }
     public bool OperationClosed { get; set; }
+    public string? Country { get; set; }
+    public string? CountryName { get; set; }
 }
 
 public sealed class OpenDealsSummaryResponse

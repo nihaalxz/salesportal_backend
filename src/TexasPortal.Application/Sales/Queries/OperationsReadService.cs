@@ -92,6 +92,10 @@ public sealed class OperationsReadService : IOperationsReadService
         if (endDate.HasValue)
         {
             var e = endDate.Value;
+            if (e.TimeOfDay == TimeSpan.Zero)
+            {
+                e = e.Date.AddDays(1).AddTicks(-1);
+            }
             flightsQuery = flightsQuery.Where(x => x.CreatedAt <= e);
             hotelsQuery = hotelsQuery.Where(x => x.CreatedAt <= e);
             visasQuery = visasQuery.Where(x => x.CreatedAt <= e);
@@ -314,6 +318,10 @@ public sealed class OperationsReadService : IOperationsReadService
         if (endDate.HasValue)
         {
             var e = endDate.Value;
+            if (e.TimeOfDay == TimeSpan.Zero)
+            {
+                e = e.Date.AddDays(1).AddTicks(-1);
+            }
             flightsQuery = flightsQuery.Where(x => x.CreatedAt <= e);
             hotelsQuery = hotelsQuery.Where(x => x.CreatedAt <= e);
             visasQuery = visasQuery.Where(x => x.CreatedAt <= e);
@@ -492,7 +500,12 @@ public sealed class OperationsReadService : IOperationsReadService
         using var dbProfit = _dbContextFactory.CreateDbContext();
         var profitQuery = dbProfit.SalesmanProfitRecords.AsNoTracking().Where(x => x.IsFinal);
         if (startDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt >= startDate.Value);
-        if (endDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt <= endDate.Value);
+        if (endDate.HasValue)
+        {
+            var eProfit = endDate.Value;
+            if (eProfit.TimeOfDay == TimeSpan.Zero) eProfit = eProfit.Date.AddDays(1).AddTicks(-1);
+            profitQuery = profitQuery.Where(x => x.BookingCreatedAt <= eProfit);
+        }
         if (salesmanId.HasValue) profitQuery = profitQuery.Where(x => x.SalesmanId == salesmanId.Value);
         var finalProfitRecords = await profitQuery
             .Select(x => new {
@@ -697,7 +710,12 @@ public sealed class OperationsReadService : IOperationsReadService
         using var dbLeads = _dbContextFactory.CreateDbContext();
         var leadsQuery = dbLeads.Leads.AsNoTracking().Where(x => x.DeletedAt == null);
         if (startDate.HasValue) leadsQuery = leadsQuery.Where(x => x.CreatedAt >= startDate.Value);
-        if (endDate.HasValue) leadsQuery = leadsQuery.Where(x => x.CreatedAt <= endDate.Value);
+        if (endDate.HasValue)
+        {
+            var eLeads = endDate.Value;
+            if (eLeads.TimeOfDay == TimeSpan.Zero) eLeads = eLeads.Date.AddDays(1).AddTicks(-1);
+            leadsQuery = leadsQuery.Where(x => x.CreatedAt <= eLeads);
+        }
         var leadsCounts = await leadsQuery
             .GroupBy(x => x.CreatedBy)
             .Select(g => new { CreatorId = g.Key, Count = g.Count() })
@@ -754,7 +772,12 @@ public sealed class OperationsReadService : IOperationsReadService
         using var dbProfit = _dbContextFactory.CreateDbContext();
         var profitQuery = dbProfit.SalesmanProfitRecords.AsNoTracking().Where(x => x.IsFinal);
         if (startDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt >= startDate.Value);
-        if (endDate.HasValue) profitQuery = profitQuery.Where(x => x.BookingCreatedAt <= endDate.Value);
+        if (endDate.HasValue)
+        {
+            var eProfit = endDate.Value;
+            if (eProfit.TimeOfDay == TimeSpan.Zero) eProfit = eProfit.Date.AddDays(1).AddTicks(-1);
+            profitQuery = profitQuery.Where(x => x.BookingCreatedAt <= eProfit);
+        }
         var finalProfitRecords = await profitQuery
             .Select(x => new { x.SalesmanId, x.BookingType, x.BookingId, x.DocumentNumber, x.ProfitAmount })
             .ToListAsync(ct);
@@ -1207,7 +1230,9 @@ public sealed class OperationsReadService : IOperationsReadService
                     PaymentStatus = h.PaymentStatus,
                     ProcessingStatus = h.ProcessingStatus,
                     IsDealClosed = h.IsDealClosed,
-                    OperationClosed = h.OperationClosed
+                    OperationClosed = h.OperationClosed,
+                    Country = h.Country,
+                    CountryName = h.Country
                 });
             }
         }
@@ -1215,6 +1240,18 @@ public sealed class OperationsReadService : IOperationsReadService
         // 3. Visas
         if (queryAll || st == "visa" || st == "visas")
         {
+            List<TexasPortal.Contracts.Sales.Bookings.VisaCountryMasterResponse>? visaCountries = null;
+            var countryMap = new Dictionary<long, string>();
+            try
+            {
+                visaCountries = await _agentsApiClient.GetVisaCountriesAsync(ct);
+                if (visaCountries != null)
+                {
+                    foreach (var c in visaCountries) countryMap[c.Id] = c.Name;
+                }
+            }
+            catch { }
+
             using var db = _dbContextFactory.CreateDbContext();
             var q = db.SalesVisaApplications.AsNoTracking()
                 .Include(x => x.Head)
@@ -1229,7 +1266,13 @@ public sealed class OperationsReadService : IOperationsReadService
             if (endOfDay.HasValue) q = q.Where(x => x.CreatedAt <= endOfDay.Value);
             if (!string.IsNullOrWhiteSpace(term))
             {
+                var matchingCountryIds = visaCountries?
+                    .Where(c => c.Name.Contains(term, StringComparison.OrdinalIgnoreCase))
+                    .Select(c => (int)c.Id)
+                    .ToList() ?? new List<int>();
+
                 q = q.Where(x =>
+                    (matchingCountryIds.Count > 0 && matchingCountryIds.Contains(x.CountryId)) ||
                     (x.DocumentNumber != null && x.DocumentNumber.ToLower().Contains(term)) ||
                     (x.VisaPackName != null && x.VisaPackName.ToLower().Contains(term)) ||
                     (x.Head != null && ((x.Head.FirstName ?? "") + " " + (x.Head.LastName ?? "")).ToLower().Contains(term)) ||
@@ -1247,6 +1290,7 @@ public sealed class OperationsReadService : IOperationsReadService
 
                 var headName = v.Head != null ? (v.Head.FirstName + " " + v.Head.LastName).Trim() : v.Agent;
                 salesmanMap.TryGetValue(v.UserId, out var smName);
+                countryMap.TryGetValue(v.CountryId, out var vCountry);
 
                 deals.Add(new OpenDealEntryResponse
                 {
@@ -1267,7 +1311,9 @@ public sealed class OperationsReadService : IOperationsReadService
                     PaymentStatus = v.PaymentStatus,
                     ProcessingStatus = v.ProcessingStatus,
                     IsDealClosed = v.IsDealClosed,
-                    OperationClosed = v.OperationClosed
+                    OperationClosed = v.OperationClosed,
+                    Country = vCountry,
+                    CountryName = vCountry
                 });
             }
         }
@@ -1328,7 +1374,9 @@ public sealed class OperationsReadService : IOperationsReadService
                     PaymentStatus = vfs.PaymentStatus,
                     ProcessingStatus = vfs.ProcessingStatus,
                     IsDealClosed = vfs.IsDealClosed,
-                    OperationClosed = vfs.OperationClosed
+                    OperationClosed = vfs.OperationClosed,
+                    Country = vfs.Country,
+                    CountryName = vfs.Country
                 });
             }
         }
@@ -1388,7 +1436,9 @@ public sealed class OperationsReadService : IOperationsReadService
                     PaymentStatus = hol.PaymentStatus,
                     ProcessingStatus = hol.ProcessingStatus,
                     IsDealClosed = hol.IsDealClosed,
-                    OperationClosed = hol.OperationClosed
+                    OperationClosed = hol.OperationClosed,
+                    Country = hol.Country,
+                    CountryName = hol.Country
                 });
             }
         }
