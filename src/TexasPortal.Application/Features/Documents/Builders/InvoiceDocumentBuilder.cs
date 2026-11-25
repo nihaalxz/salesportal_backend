@@ -89,8 +89,8 @@ public class InvoiceDocumentBuilder : IDocumentBuilder
             {
                 Columns = new List<DocumentColumn>
                 {
-                    new() { Header = "S NO.", RelativeWidth = 0.5f, Alignment = ColumnAlignment.Center },
-                    new() { Header = "DESCRIPTION", RelativeWidth = 4.0f, Alignment = ColumnAlignment.Left },
+                    new() { Header = "S NO.", RelativeWidth = 0.7f, Alignment = ColumnAlignment.Center },
+                    new() { Header = "DESCRIPTION", RelativeWidth = 3.8f, Alignment = ColumnAlignment.Left },
                     new() { Header = "QTY", RelativeWidth = 0.6f, Alignment = ColumnAlignment.Center },
                     new() { Header = "RATE", RelativeWidth = 1.0f, Alignment = ColumnAlignment.Right },
                     new() { Header = "PRICE", RelativeWidth = 1.0f, Alignment = ColumnAlignment.Right },
