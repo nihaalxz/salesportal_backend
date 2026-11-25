@@ -13,7 +13,7 @@ public class QuotationPdfDocument : IDocument
     private readonly QuotationPdfRequest _request;
     private readonly string? _webRootPath;
 
-    private const string PrimaryColor = "#1b2559";
+    private const string PrimaryColor = "#573C97";
     private const string DarkTextColor = "#0f172a";
     private const string MutedTextColor = "#64748b";
     private const string BorderColor = "#cbd5e1";
@@ -40,7 +40,7 @@ public class QuotationPdfDocument : IDocument
                 page.Size(PageSizes.A4);
                 page.Margin(24);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(x => x.FontSize(8.5f).FontColor(DarkTextColor).FontFamily("Lato"));
+                page.DefaultTextStyle(x => x.FontSize(8.5f).FontColor(DarkTextColor).FontFamily("Roboto"));
 
                 page.Content().Column(col =>
                 {

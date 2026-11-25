@@ -6,8 +6,17 @@ using Microsoft.OpenApi.Models;
 using TexasPortal.Infrastructure;
 using TexasPortal.Api.Extensions;
 
-// Configure QuestPDF License
+// Configure QuestPDF License & Fonts
 QuestPDF.Settings.License = QuestPDF.Infrastructure.LicenseType.Community;
+var fontsDir = Path.Combine(AppContext.BaseDirectory, "Fonts");
+if (Directory.Exists(fontsDir))
+{
+    foreach (var fontFile in Directory.GetFiles(fontsDir, "*.ttf"))
+    {
+        using var fontStream = File.OpenRead(fontFile);
+        QuestPDF.Drawing.FontManager.RegisterFont(fontStream);
+    }
+}
 
 var builder = WebApplication.CreateBuilder(args);
 

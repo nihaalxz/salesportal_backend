@@ -29,7 +29,7 @@ public class GenericDocumentPdfDocument : IDocument
                 page.Size(PageSizes.A4);
                 page.Margin(24);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(x => x.FontSize(8.5f).FontColor("#334155").FontFamily("Lato"));
+                page.DefaultTextStyle(x => x.FontSize(8.5f).FontColor("#334155").FontFamily("Roboto"));
 
                 page.Content().Column(col =>
                 {
@@ -42,7 +42,7 @@ public class GenericDocumentPdfDocument : IDocument
 
     private void ComposeHeader(IContainer container)
     {
-        var accentColor = string.IsNullOrWhiteSpace(_model.Options.PrimaryColor) ? "#1b2559" : _model.Options.PrimaryColor;
+        var accentColor = string.IsNullOrWhiteSpace(_model.Options.PrimaryColor) ? "#573C97" : _model.Options.PrimaryColor;
 
         container.Column(col =>
         {
@@ -86,7 +86,7 @@ public class GenericDocumentPdfDocument : IDocument
 
     private void ComposeContent(IContainer container)
     {
-        var accentColor = string.IsNullOrWhiteSpace(_model.Options.PrimaryColor) ? "#1b2559" : _model.Options.PrimaryColor;
+        var accentColor = string.IsNullOrWhiteSpace(_model.Options.PrimaryColor) ? "#573C97" : _model.Options.PrimaryColor;
 
         container.Column(col =>
         {

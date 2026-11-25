@@ -2840,10 +2840,17 @@ public sealed class OperationsReadService : IOperationsReadService
         if (!string.IsNullOrWhiteSpace(search))
         {
             var term = search.Trim().ToLower();
-            q = q.Where(h => (h.FirstName != null && h.FirstName.ToLower().Contains(term)) ||
-                             (h.LastName != null && h.LastName.ToLower().Contains(term)) ||
-                             h.Email.ToLower().Contains(term) ||
-                             h.MobileNo.Contains(term));
+            var tokens = term.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+            foreach (var tok in tokens)
+            {
+                q = q.Where(h =>
+                    (h.FirstName != null && h.FirstName.ToLower().Contains(tok)) ||
+                    (h.LastName != null && h.LastName.ToLower().Contains(tok)) ||
+                    ((h.FirstName ?? "") + " " + (h.LastName ?? "")).ToLower().Contains(tok) ||
+                    (h.Nationality != null && h.Nationality.ToLower().Contains(tok)) ||
+                    (h.Email != null && h.Email.ToLower().Contains(tok)) ||
+                    (h.MobileNo != null && h.MobileNo.Contains(tok)));
+            }
         }
 
         if (!string.IsNullOrWhiteSpace(type) && !type.Equals("all", StringComparison.OrdinalIgnoreCase))

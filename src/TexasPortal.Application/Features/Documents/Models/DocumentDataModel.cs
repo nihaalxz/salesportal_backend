@@ -39,7 +39,7 @@ public class DocumentSummaryCard
     public string Label { get; set; } = string.Empty;
     public string Value { get; set; } = string.Empty;
     public string? Subtext { get; set; }
-    public string HighlightColor { get; set; } = "#1b2559";
+    public string HighlightColor { get; set; } = "#573C97";
 }
 
 public class DocumentTable

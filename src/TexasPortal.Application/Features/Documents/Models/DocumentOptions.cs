@@ -12,7 +12,7 @@ public class DocumentOptions
     public string Website { get; set; } = "www.texastravelsbh.com";
     public string Note { get; set; } = "This is a computer-generated official document.";
     public DocumentBankDetails BankDetails { get; set; } = new();
-    public string PrimaryColor { get; set; } = "#1b2559";
+    public string PrimaryColor { get; set; } = "#573C97";
     public string SecondaryColor { get; set; } = "#475569";
 }
 

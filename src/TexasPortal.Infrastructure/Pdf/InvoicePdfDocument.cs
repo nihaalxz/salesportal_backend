@@ -28,7 +28,7 @@ public class InvoicePdfDocument : IDocument
                 page.Size(PageSizes.A4);
                 page.Margin(18);
                 page.PageColor(Colors.White);
-                page.DefaultTextStyle(x => x.FontSize(9).FontColor("#334155").FontFamily("Arial"));
+                page.DefaultTextStyle(x => x.FontSize(9).FontColor("#334155").FontFamily("Roboto"));
 
                 page.Content().Border(1).BorderColor("#94a3b8").Padding(16).Column(col =>
                 {
@@ -55,14 +55,14 @@ public class InvoicePdfDocument : IDocument
                     }
                     else
                     {
-                        logoCol.Item().Text(_model.Options.CompanyName).Bold().FontSize(13).FontColor("#1b2559");
+                        logoCol.Item().Text(_model.Options.CompanyName).Bold().FontSize(13).FontColor("#573C97");
                     }
                 });
 
                 // Right: Company Details (Expanded width for perfect single-line address alignment)
                 row.RelativeItem().Column(compCol =>
                 {
-                    compCol.Item().AlignRight().Text(_model.Options.CompanyName).Bold().FontSize(12).FontColor("#1b2559");
+                    compCol.Item().AlignRight().Text(_model.Options.CompanyName).Bold().FontSize(12).FontColor("#573C97");
                     if (!string.IsNullOrWhiteSpace(_model.Options.OfficeDetails))
                         compCol.Item().AlignRight().Text(_model.Options.OfficeDetails).FontSize(7.8f).FontColor("#475569");
                     var crAndPhone = string.Join(", ", new[] { _model.Options.CrNumber, _model.Options.Phone }.Where(s => !string.IsNullOrWhiteSpace(s)));
@@ -125,7 +125,7 @@ public class InvoicePdfDocument : IDocument
                 bool isRcpHead = string.Equals(_model.ServiceName, "PAYMENT RECEIPT", StringComparison.OrdinalIgnoreCase) ||
                                  _model.InvoiceNo.StartsWith("RCP", StringComparison.OrdinalIgnoreCase) ||
                                  _model.InvoiceNo.StartsWith("TXS-ARCPT", StringComparison.OrdinalIgnoreCase);
-                titleCol.Item().AlignCenter().Text(isRcpHead ? $"Receipt #{_model.InvoiceNo}" : $"Invoice #{_model.InvoiceNo}").Bold().FontSize(16f).FontColor("#1b2559");
+                titleCol.Item().AlignCenter().Text(isRcpHead ? $"Receipt #{_model.InvoiceNo}" : $"Invoice #{_model.InvoiceNo}").Bold().FontSize(16f).FontColor("#573C97");
             });
 
             // Line Items Table
@@ -146,7 +146,7 @@ public class InvoicePdfDocument : IDocument
                 table.Header(header =>
                 {
                     static IContainer HeaderStyle(IContainer cell) =>
-                        cell.Background("#1b2559").PaddingVertical(6).PaddingHorizontal(4).AlignCenter();
+                        cell.Background("#573C97").PaddingVertical(6).PaddingHorizontal(4).AlignCenter();
 
                     header.Cell().Element(HeaderStyle).Text("S NO.").Bold().FontSize(8).FontColor(Colors.White);
                     header.Cell().Element(HeaderStyle).Text("DESCRIPTION").Bold().FontSize(8).FontColor(Colors.White);
@@ -173,7 +173,7 @@ public class InvoicePdfDocument : IDocument
             // Remarks box below table
             if (!string.IsNullOrWhiteSpace(_model.RemarksNote))
             {
-                col.Item().PaddingTop(8).Background("#f8fafc").BorderLeft(3).BorderColor("#1b2559").Padding(8).Text(_model.RemarksNote).FontSize(8.5f).FontColor("#475569");
+                col.Item().PaddingTop(8).Background("#f8fafc").BorderLeft(3).BorderColor("#573C97").Padding(8).Text(_model.RemarksNote).FontSize(8.5f).FontColor("#475569");
             }
 
             col.Item().PaddingVertical(15);
@@ -200,7 +200,7 @@ public class InvoicePdfDocument : IDocument
                     {
                         bankBox.Item().Row(bHeader =>
                         {
-                            bHeader.RelativeItem().Text("BANK ACCOUNT DETAILS").Bold().FontSize(8.5f).FontColor("#1b2559");
+                            bHeader.RelativeItem().Text("BANK ACCOUNT DETAILS").Bold().FontSize(8.5f).FontColor("#573C97");
                             if (!string.IsNullOrWhiteSpace(_model.Options.BankDetails.Currency))
                             {
                                 bHeader.AutoItem().Text($"Currency: {_model.Options.BankDetails.Currency}").Bold().FontSize(8f).FontColor("#059669");
@@ -260,8 +260,8 @@ public class InvoicePdfDocument : IDocument
                         }
 
                         // Net Total Row Highlighted
-                        totTable.Cell().Background("#f1f5f9").Padding(6).Text("Net Total").Bold().FontSize(10).FontColor("#1b2559");
-                        totTable.Cell().Background("#f1f5f9").Padding(6).AlignRight().Text($"{_model.NetTotal:0.000} ب.د").Bold().FontSize(10).FontColor("#1b2559");
+                        totTable.Cell().Background("#f1f5f9").Padding(6).Text("Net Total").Bold().FontSize(10).FontColor("#573C97");
+                        totTable.Cell().Background("#f1f5f9").Padding(6).AlignRight().Text($"{_model.NetTotal:0.000} ب.د").Bold().FontSize(10).FontColor("#573C97");
                     });
                 });
             });
@@ -279,7 +279,7 @@ public class InvoicePdfDocument : IDocument
                     if (!string.IsNullOrWhiteSpace(_model.AccountantName))
                         sCol.Item().Text($"Accountant: {_model.AccountantName}").FontSize(8.5f).FontColor("#475569");
 
-                    sCol.Item().PaddingTop(12).Text("Thank You For Your Business").Bold().FontSize(10).FontColor("#1b2559");
+                    sCol.Item().PaddingTop(12).Text("Thank You For Your Business").Bold().FontSize(10).FontColor("#573C97");
                 });
 
                 row.RelativeItem().Column(sigCol =>
