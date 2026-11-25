@@ -42,12 +42,18 @@ public class VisaInvoiceBuilder : IInvoiceBuilder
 
         var items = new List<InvoiceLineItem>();
         int itemNo = 1;
+        var countryName = booking.CountryName?.Trim();
+        var packName = string.IsNullOrWhiteSpace(booking.VisaPackName) ? "Visa Application" : booking.VisaPackName.Trim();
+        var serviceTitle = !string.IsNullOrWhiteSpace(countryName) &&
+                           !packName.Contains(countryName, StringComparison.OrdinalIgnoreCase)
+            ? $"{countryName} - {packName}"
+            : packName;
 
         if (booking.Applicants != null && booking.Applicants.Count > 0)
         {
             foreach (var app in booking.Applicants)
             {
-                var desc = $"{booking.VisaPackName ?? "Visa Application"} - {app.FName} {app.LName} ({app.PassportNo})";
+                var desc = $"{serviceTitle} - {app.FName} {app.LName} ({app.PassportNo})";
                 items.Add(new InvoiceLineItem
                 {
                     ItemNo = itemNo++,
@@ -67,7 +73,7 @@ public class VisaInvoiceBuilder : IInvoiceBuilder
             items.Add(new InvoiceLineItem
             {
                 ItemNo = 1,
-                Description = booking.VisaPackName ?? "Visa Application",
+                Description = serviceTitle,
                 Quantity = 1,
                 Rate = booking.PayableAmount,
                 Price = booking.PayableAmount,
@@ -97,7 +103,9 @@ public class VisaInvoiceBuilder : IInvoiceBuilder
             SalesmanEmail = salesmanName,
             PreparedBy = salesmanName,
             AccountantName = accountantName,
-            RemarksNote = $"Visa Application - {booking.HeadName ?? booking.Agent ?? "Customer"}",
+            RemarksNote = !string.IsNullOrWhiteSpace(countryName)
+                ? $"Visa Application ({countryName}) - {booking.HeadName ?? booking.Agent ?? "Customer"}"
+                : $"Visa Application - {booking.HeadName ?? booking.Agent ?? "Customer"}",
             Items = items,
             SubTotal = netTotal,
             TaxableAmount = 0,
